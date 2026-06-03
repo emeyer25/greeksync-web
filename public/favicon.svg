@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="GreekSync">
+  <!-- Coral rounded-square background -->
+  <rect width="32" height="32" rx="8" ry="8" fill="#FF6B4A"/>
+
+  <!-- GS monogram — optical center: x=16, baseline=22 -->
+  <!-- Two-character monogram: G (white) + S (white/slightly offset) -->
+  <!-- Using a single <text> node so letter-spacing is applied uniformly. -->
+  <!-- font-family intentionally generic — SVGs in <img> / <link> can't load -->
+  <!-- external fonts, so we rely on a system bold sans-serif that renders  -->
+  <!-- similarly across macOS (SF Pro), Windows (Arial), and Linux (DejaVu). -->
+  <text
+    x="16"
+    y="22"
+    text-anchor="middle"
+    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Arial, sans-serif"
+    font-weight="800"
+    font-size="14"
+    letter-spacing="-0.5"
+    fill="#ffffff"
+  >GS</text>
+</svg>

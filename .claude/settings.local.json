@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(ls /Users/ericmeyer/ChapterAI/.env*)",
+      "Bash(ls -la /Users/ericmeyer/chapterai/*.md)",
+      "Bash(ls -la /Users/ericmeyer/chapterai/.env*)",
+      "Bash(xxd /Users/ericmeyer/chapterai/.env.local)",
+      "Bash(python3 -c \":*)",
+      "Bash(head -20 grep -n \"min-h-screen\\\\|AppNav\\\\|pt-14\\\\|pt-16\\\\|return \\(\" /Users/ericmeyer/chapterai/app/events/[id]/page.tsx)",
+      "Bash(head -20 grep -n \"min-h-screen\\\\|AppNav\\\\|pt-14\\\\|pt-16\\\\|return \\(\" /Users/ericmeyer/chapterai/app/rush/slides/page.tsx)",
+      "Bash(wc -l /Users/ericmeyer/chapterai/app/events/[id]/page.tsx)",
+      "Bash(tail -8 /Users/ericmeyer/chapterai/app/events/[id]/page.tsx)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/settings)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/members)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/profile)",
+      "Bash(curl -s http://localhost:3001/settings)",
+      "Bash(curl -s http://localhost:3001/profile)",
+      "Bash(curl -s http://localhost:3001/members)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/calendar)",
+      "Bash(find /Users/ericmeyer/chapterai/lib -type f -name *.ts -o -name *.tsx)",
+      "Bash(grep -r \"chapters.*update\\\\|\\\\.from.*chapters\" /Users/ericmeyer/chapterai --include=*.ts --include=*.tsx)",
+      "Bash(xargs ls:*)"
+    ]
+  }
+}

@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #0D1117;
+    color: #FFFFFF;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #21262D; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #30363D; }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.3;
+  }
+}
+
+@layer components {
+
+  /* ─── Cards ────────────────────────────────────────── */
+
+  .card {
+    @apply bg-[#161B22] border border-[#21262D] rounded-xl;
+    transition: border-color 200ms ease-out, transform 200ms ease-out;
+  }
+  .card:hover {
+    border-color: #30363D;
+    transform: translateY(-1px);
+  }
+
+
+  /* ─── Form Fields ───────────────────────────────────── */
+
+  .field {
+    @apply w-full bg-[#0D1117] border border-[#21262D] rounded-lg h-10 px-3
+           text-white placeholder-[#8B949E] text-[15px]
+           focus:outline-none focus:border-[#FF6B4A]
+           transition-all duration-200;
+    box-shadow: none;
+  }
+  .field:focus {
+    box-shadow: 0 0 0 3px rgba(255, 107, 74, 0.15);
+  }
+  .field:disabled {
+    @apply opacity-50;
+  }
+
+  /* Solid bg for selects so the option dropdown isn't transparent */
+  select.field {
+    @apply bg-[#0D1117];
+  }
+
+
+  /* ─── Buttons ───────────────────────────────────────── */
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center
+           bg-[#FF6B4A] hover:bg-[#E85A3A]
+           text-white font-medium text-sm px-4 h-10 rounded-lg
+           transition-colors duration-150 active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B4A]/50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center
+           bg-transparent hover:bg-[#161B22]
+           border border-[#21262D] hover:border-[#30363D]
+           text-white font-medium text-sm px-4 h-10 rounded-lg
+           transition-all duration-150 active:scale-[0.98] disabled:opacity-50
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center
+           bg-transparent hover:bg-[#161B22]
+           border border-[#21262D]
+           text-[#8B949E] hover:text-white font-medium text-sm px-4 h-10 rounded-lg
+           transition-all duration-150 active:scale-[0.98] disabled:opacity-50
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center
+           bg-[#E5484D] hover:bg-[#c93c41]
+           text-white font-medium text-sm px-4 h-10 rounded-lg
+           transition-colors duration-150 active:scale-[0.98]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5484D]/50;
+  }
+
+
+  /* ─── Typography ────────────────────────────────────── */
+
+  .label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8B949E];
+  }
+
+  /* Main page heading — used as <h1 className="section-title"> */
+  .section-title {
+    @apply text-[28px] font-bold text-white tracking-tight leading-tight;
+  }
+
+
+  /* ─── Dividers ──────────────────────────────────────── */
+
+  .divider {
+    height: 1px;
+    background: #21262D;
+  }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
