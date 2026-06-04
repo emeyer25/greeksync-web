@@ -36,10 +36,6 @@ async function fetchViaRapidApi(username: string, apiKey: string) {
 
   const data = await res.json()
 
-  if (data.is_private) {
-    return NextResponse.json({ error: 'This account is private' }, { status: 403 })
-  }
-
   // Prefer the HD photo; fall back to the standard one
   const photoUrl =
     data.hd_profile_pic_url_info?.url ?? data.profile_pic_url ?? null
