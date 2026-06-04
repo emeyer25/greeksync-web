@@ -77,6 +77,7 @@ export default function RushPage() {
   const [saving, setSaving] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const photoFileRef = useRef<File | null>(null)
+  const photoUrlRef = useRef<string | null>(null) // URL from Instagram import
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [rushEvents, setRushEvents] = useState<RushEvent[]>([])
@@ -98,6 +99,7 @@ export default function RushPage() {
   const [editIgImportError, setEditIgImportError] = useState<string | null>(null)
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null)
   const editPhotoFileRef = useRef<File | null>(null)
+  const editPhotoUrlRef = useRef<string | null>(null) // URL from Instagram import
   const editFileInputRef = useRef<HTMLInputElement>(null)
   const [savingEdit, setSavingEdit] = useState(false)
 
@@ -233,6 +235,7 @@ export default function RushPage() {
     setSaving(true)
     let photo_url: string | null = null
     if (photoFileRef.current) photo_url = await uploadPhoto(photoFileRef.current)
+    else if (photoUrlRef.current) photo_url = photoUrlRef.current
     const { data } = await supabase.from('rushees').insert({
       name: form.name.trim(),
       hometown: form.hometown.trim() || null,
@@ -247,6 +250,7 @@ export default function RushPage() {
     setForm({ name: '', hometown: '', notes: '', status: 'Rushing', phone: '', instagram: '' })
     setPhotoPreview(null)
     photoFileRef.current = null
+    photoUrlRef.current = null
     if (fileInputRef.current) fileInputRef.current.value = ''
     setShowForm(false)
     setSaving(false)
@@ -279,6 +283,7 @@ export default function RushPage() {
     setEditMode(false)
     setEditPhotoPreview(null)
     editPhotoFileRef.current = null
+    editPhotoUrlRef.current = null
   }
 
   function handleEditPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -293,6 +298,7 @@ export default function RushPage() {
     setSavingEdit(true)
     let photo_url = selectedRushee.photo_url
     if (editPhotoFileRef.current) photo_url = await uploadPhoto(editPhotoFileRef.current)
+    else if (editPhotoUrlRef.current) photo_url = editPhotoUrlRef.current
     const updates = {
       name: editForm.name.trim() || selectedRushee.name,
       hometown: editForm.hometown.trim() || null,
@@ -528,7 +534,10 @@ export default function RushPage() {
                         setIgImporting,
                         ({ name, photoUrl }) => {
                           if (name && !form.name.trim()) setForm(p => ({ ...p, name }))
-                          if (photoUrl && !photoPreview) setPhotoPreview(photoUrl)
+                          if (photoUrl && !photoPreview) {
+                            setPhotoPreview(photoUrl)
+                            photoUrlRef.current = photoUrl
+                          }
                         },
                       )}
                       className="px-3 py-2 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 whitespace-nowrap"
@@ -765,7 +774,10 @@ export default function RushPage() {
                           setEditIgImporting,
                           ({ name, photoUrl }) => {
                             if (name && !editForm.name.trim()) setEditForm(p => ({ ...p, name }))
-                            if (photoUrl && !editPhotoPreview) setEditPhotoPreview(photoUrl)
+                            if (photoUrl && !editPhotoPreview) {
+                            setEditPhotoPreview(photoUrl)
+                            editPhotoUrlRef.current = photoUrl
+                          }
                           },
                         )}
                         className="px-3 py-2 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 whitespace-nowrap"
