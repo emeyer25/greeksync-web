@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
-import type { SavedEvent } from '@/types/event-generator'
+import type { SavedEvent } from '@/types/events'
 
 const EVENT_TYPES = [
   'Mixer', 'Date Party / Cocktail', 'Formal', 'Darty',

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, ChevronRight, ChevronDown, ChevronLeft } from 'lucide-react'
-import type { SavedEvent } from '@/types/event-generator'
+import type { SavedEvent } from '@/types/events'
 
 interface CalendarViewProps {
   events: SavedEvent[]
