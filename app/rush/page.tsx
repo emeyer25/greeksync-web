@@ -18,6 +18,7 @@ interface Rushee {
   status: Status
   photo_url: string | null
   phone: string | null
+  instagram: string | null
 }
 
 interface RushEvent {
@@ -85,12 +86,16 @@ export default function RushPage() {
   const [toggling, setToggling] = useState<string | null>(null)
 
   const [form, setForm] = useState({
-    name: '', hometown: '', notes: '', status: 'Rushing' as Status, phone: '',
+    name: '', hometown: '', notes: '', status: 'Rushing' as Status, phone: '', instagram: '',
   })
+  const [igImporting, setIgImporting] = useState(false)
+  const [igImportError, setIgImportError] = useState<string | null>(null)
 
   const [selectedRushee, setSelectedRushee] = useState<Rushee | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', hometown: '', notes: '', phone: '', status: 'Rushing' as Status })
+  const [editForm, setEditForm] = useState({ name: '', hometown: '', notes: '', phone: '', instagram: '', status: 'Rushing' as Status })
+  const [editIgImporting, setEditIgImporting] = useState(false)
+  const [editIgImportError, setEditIgImportError] = useState<string | null>(null)
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null)
   const editPhotoFileRef = useRef<File | null>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
@@ -200,6 +205,28 @@ export default function RushPage() {
     }
   }
 
+  async function importInstagram(
+    handle: string,
+    setError: (e: string | null) => void,
+    setImporting: (v: boolean) => void,
+    onSuccess: (data: { name?: string | null; photoUrl?: string | null }) => void,
+  ) {
+    const username = handle.replace('@', '').trim()
+    if (!username) return
+    setImporting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/instagram?username=${encodeURIComponent(username)}`)
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Could not load profile'); return }
+      onSuccess(json)
+    } catch {
+      setError('Network error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !form.name.trim()) return
@@ -211,12 +238,13 @@ export default function RushPage() {
       hometown: form.hometown.trim() || null,
       notes: form.notes.trim() || null,
       phone: form.phone.trim() || null,
+      instagram: form.instagram.trim() || null,
       status: form.status,
       photo_url,
       ...(chapterId ? { chapter_id: chapterId } : {}),
     }).select().single()
     if (data) setRushees(prev => [data as Rushee, ...prev])
-    setForm({ name: '', hometown: '', notes: '', status: 'Rushing', phone: '' })
+    setForm({ name: '', hometown: '', notes: '', status: 'Rushing', phone: '', instagram: '' })
     setPhotoPreview(null)
     photoFileRef.current = null
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -241,7 +269,7 @@ export default function RushPage() {
   function openPanel(r: Rushee) {
     setSelectedRushee(r)
     setEditMode(false)
-    setEditForm({ name: r.name, hometown: r.hometown ?? '', notes: r.notes ?? '', phone: r.phone ?? '', status: r.status })
+    setEditForm({ name: r.name, hometown: r.hometown ?? '', notes: r.notes ?? '', phone: r.phone ?? '', instagram: r.instagram ?? '', status: r.status })
     setEditPhotoPreview(r.photo_url)
     editPhotoFileRef.current = null
   }
@@ -270,6 +298,7 @@ export default function RushPage() {
       hometown: editForm.hometown.trim() || null,
       notes: editForm.notes.trim() || null,
       phone: editForm.phone.trim() || null,
+      instagram: editForm.instagram.trim() || null,
       status: editForm.status,
       photo_url,
     }
@@ -482,6 +511,35 @@ export default function RushPage() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
+                  <label className="label block mb-2">Instagram</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={form.instagram}
+                      onChange={e => { setForm(p => ({ ...p, instagram: e.target.value })); setIgImportError(null) }}
+                      placeholder="@handle"
+                      className="field flex-1"
+                    />
+                    <button
+                      type="button"
+                      disabled={igImporting || !form.instagram.trim()}
+                      onClick={() => importInstagram(
+                        form.instagram,
+                        setIgImportError,
+                        setIgImporting,
+                        ({ name, photoUrl }) => {
+                          if (name && !form.name.trim()) setForm(p => ({ ...p, name }))
+                          if (photoUrl && !photoPreview) setPhotoPreview(photoUrl)
+                        },
+                      )}
+                      className="px-3 py-2 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 whitespace-nowrap"
+                    >
+                      {igImporting ? 'Loading…' : 'Import'}
+                    </button>
+                  </div>
+                  {igImportError && <p className="text-xs text-red-400 mt-1">{igImportError}</p>}
+                  <p className="text-[#8B949E]/60 text-xs mt-1">Import fills in name and profile photo from a public account.</p>
+                </div>
+                <div className="md:col-span-2">
                   <label className="label block mb-2">Notes</label>
                   <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                     placeholder="Mutual connections, interests, impressions…"
@@ -690,6 +748,34 @@ export default function RushPage() {
                       placeholder="(555) 000-0000" className="field" />
                   </div>
                   <div>
+                    <label className="label block mb-2">Instagram</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={editForm.instagram}
+                        onChange={e => { setEditForm(p => ({ ...p, instagram: e.target.value })); setEditIgImportError(null) }}
+                        placeholder="@handle"
+                        className="field flex-1"
+                      />
+                      <button
+                        type="button"
+                        disabled={editIgImporting || !editForm.instagram.trim()}
+                        onClick={() => importInstagram(
+                          editForm.instagram,
+                          setEditIgImportError,
+                          setEditIgImporting,
+                          ({ name, photoUrl }) => {
+                            if (name && !editForm.name.trim()) setEditForm(p => ({ ...p, name }))
+                            if (photoUrl && !editPhotoPreview) setEditPhotoPreview(photoUrl)
+                          },
+                        )}
+                        className="px-3 py-2 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 whitespace-nowrap"
+                      >
+                        {editIgImporting ? 'Loading…' : 'Import'}
+                      </button>
+                    </div>
+                    {editIgImportError && <p className="text-xs text-red-400 mt-1">{editIgImportError}</p>}
+                  </div>
+                  <div>
                     <label className="label block mb-2">Hometown</label>
                     <input value={editForm.hometown} onChange={e => setEditForm(p => ({ ...p, hometown: e.target.value }))}
                       placeholder="City, State" className="field" />
@@ -738,6 +824,19 @@ export default function RushPage() {
                       <div>
                         <p className="label mb-1">Phone</p>
                         <p className="font-mono text-white text-sm">{selectedRushee.phone}</p>
+                      </div>
+                    )}
+                    {selectedRushee.instagram && (
+                      <div>
+                        <p className="label mb-1">Instagram</p>
+                        <a
+                          href={`https://instagram.com/${selectedRushee.instagram.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#FF6B4A] text-sm hover:underline"
+                        >
+                          @{selectedRushee.instagram.replace('@', '')}
+                        </a>
                       </div>
                     )}
                     <div>
