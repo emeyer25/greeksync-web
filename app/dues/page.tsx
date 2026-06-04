@@ -843,9 +843,9 @@ export default function DuesPage() {
                 {isManager && (
                   <button
                     onClick={() => setShowReminders(true)}
-                    className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#FF6B4A] text-white text-sm font-medium hover:bg-[#E85A3A] active:scale-[0.98] transition-all"
+                    className="flex items-center gap-2 h-9 px-3 rounded-lg border border-[#21262D] text-[#8B949E] text-sm font-medium hover:text-white hover:border-[#30363D] transition-colors"
                   >
-                    <Bell size={15} />
+                    <Bell size={14} />
                     Send Reminders
                   </button>
                 )}

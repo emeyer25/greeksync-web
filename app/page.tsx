@@ -34,19 +34,26 @@ const FEATURES = [
   },
 ]
 
+const IMAGES = [
+  '/images/images.jpg',
+  '/images/images-1.jpg',
+  '/images/images-2.jpg',
+  '/images/images-3.jpg',
+  '/images/images-4.jpg',
+  '/images/images-5.jpg',
+  '/images/image.webp',
+  '/images/e646255d9087b1510195592403f4afa4.jpg',
+]
+
+// 4 columns × 3 rows = 12 cells, cycling through the 8 images
+const COLLAGE_CELLS = Array.from({ length: 12 }, (_, i) => IMAGES[i % IMAGES.length])
+
+// Duplicate for seamless marquee loop
+const STRIP_IMAGES = [...IMAGES, ...IMAGES]
+
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#0D1117] text-white">
-      {/* Dot-grid background */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-          opacity: 0.03,
-        }}
-      />
-
       {/* Nav */}
       <nav className="sticky top-0 z-50 border-b border-[#21262D] backdrop-blur-md bg-[#0D1117]/80">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -69,69 +76,63 @@ export default function HomePage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative min-h-[calc(100vh-56px)] flex items-center">
-        <div className="max-w-6xl mx-auto px-6 py-20 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left: copy */}
-          <div>
-            <p className="text-[#FF6B4A] text-xs font-medium uppercase tracking-[0.05em] mb-6">
-              Built for Greek life
-            </p>
-            <h1
-              className="font-bold text-[48px] leading-[1.2] tracking-tight mb-6"
-              style={{ fontFamily: 'var(--font-satoshi, sans-serif)' }}
-            >
-              Run your chapter like a{' '}
-              <span
+      <section className="relative min-h-[calc(100vh-56px)] flex items-center overflow-hidden">
+        {/* 4×3 photo collage background */}
+        <div className="absolute inset-0 grid grid-cols-4 grid-rows-3">
+          {COLLAGE_CELLS.map((src, i) => (
+            <div key={i} className="overflow-hidden">
+              <img
+                src={src}
+                alt=""
+                className="w-full h-full"
                 style={{
-                  textDecoration: 'underline',
-                  textDecorationColor: '#FF6B4A',
-                  textDecorationThickness: '3px',
-                  textUnderlineOffset: '6px',
+                  objectFit: 'cover',
+                  filter: 'brightness(0.7) saturate(1.1)',
                 }}
-              >
-                pro.
-              </span>
-            </h1>
-            <p className="text-[#8B949E] text-lg leading-relaxed mb-10 max-w-[480px]">
-              Calendar. Rush. Roster. One platform.
-            </p>
-            <Link
-              href="/register"
-              className="inline-block bg-[#FF6B4A] hover:bg-[#E85A3A] text-white font-medium text-base px-8 py-3 rounded-lg transition-colors"
-            >
-              Get Started Free
-            </Link>
-          </div>
+              />
+            </div>
+          ))}
+        </div>
 
-          {/* Right: product screenshot */}
-          <div className="hidden lg:flex items-center justify-center">
-            <div
-              className="w-full max-w-lg bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden"
+        {/* Radial gradient overlay */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, rgba(14,14,14,0.2) 0%, rgba(14,14,14,0.75) 100%)',
+          }}
+        />
+
+        {/* Content */}
+        <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 w-full">
+          <p className="text-[#FF6B4A] text-xs font-medium uppercase tracking-[0.05em] mb-6">
+            Built for Greek life
+          </p>
+          <h1
+            className="font-bold text-[48px] leading-[1.2] tracking-tight mb-6 max-w-[600px]"
+            style={{ fontFamily: 'var(--font-satoshi, sans-serif)' }}
+          >
+            Run your chapter like a{' '}
+            <span
               style={{
-                transform: 'rotate(2deg)',
-                boxShadow: '0 32px 64px rgba(0,0,0,0.4)',
+                textDecoration: 'underline',
+                textDecorationColor: '#FF6B4A',
+                textDecorationThickness: '3px',
+                textUnderlineOffset: '6px',
               }}
             >
-              <div className="bg-[#21262D] h-9 flex items-center px-4 gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#30363D]" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#30363D]" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#30363D]" />
-              </div>
-              <div className="p-6">
-                <div className="h-4 w-1/3 bg-[#21262D] rounded mb-4" />
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="bg-[#21262D] rounded-lg p-3 h-20" />
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="h-10 bg-[#21262D] rounded-lg" />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+              pro.
+            </span>
+          </h1>
+          <p className="text-white/70 text-lg leading-relaxed mb-10 max-w-[480px]">
+            Calendar. Rush. Roster. One platform.
+          </p>
+          <Link
+            href="/register"
+            className="inline-block bg-[#FF6B4A] hover:bg-[#E85A3A] text-white font-medium text-base px-8 py-3 rounded-lg transition-colors"
+          >
+            Get Started Free
+          </Link>
         </div>
       </section>
 
@@ -170,6 +171,34 @@ export default function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* Auto-scrolling photo strip */}
+      <div className="border-t border-b border-[#21262D] overflow-hidden py-4 bg-[#0D1117]">
+        <div
+          className="flex gap-3"
+          style={{
+            width: 'max-content',
+            animation: 'marquee 32s linear infinite',
+          }}
+        >
+          {STRIP_IMAGES.map((src, i) => (
+            <div
+              key={i}
+              className="flex-shrink-0 w-48 h-32 rounded-lg overflow-hidden"
+            >
+              <img
+                src={src}
+                alt=""
+                className="w-full h-full"
+                style={{
+                  objectFit: 'cover',
+                  filter: 'brightness(0.7) saturate(1.1)',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Footer */}
       <footer className="border-t border-[#21262D] py-6">

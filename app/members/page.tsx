@@ -83,6 +83,7 @@ export default function MembersPage() {
   const [saving, setSaving] = useState(false)
   const [inviteError, setInviteError] = useState('')
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [createdInvite, setCreatedInvite] = useState<PendingInvite | null>(null)
 
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [drawerPosSelect, setDrawerPosSelect] = useState('')
@@ -147,22 +148,36 @@ export default function MembersPage() {
   }
 
   const sendInvite = async () => {
-    if (!supabase || !inviteEmail.trim() || !user) return
+    if (!supabase || !user) return
     if (!chapterId) { setInviteError('No chapter found. Try signing out and back in.'); return }
     setSaving(true)
     setInviteError('')
     const { data, error } = await supabase
       .from('chapter_invites')
-      .insert({ chapter_id: chapterId, email: inviteEmail.trim().toLowerCase(), role: 'member', position: resolvePos(invPosSelect, invPosCustom), invited_by: user.id })
+      .insert({
+        chapter_id: chapterId,
+        email: inviteEmail.trim().toLowerCase(),
+        role: 'member',
+        position: resolvePos(invPosSelect, invPosCustom),
+        invited_by: user.id,
+      })
       .select().single()
     if (error) {
       setInviteError(error.message)
     } else if (data) {
       setInvites(prev => [data as PendingInvite, ...prev])
-      setInviteEmail(''); setInvPosSelect('Member'); setInvPosCustom('')
-      setPanel('none')
+      setCreatedInvite(data as PendingInvite)
     }
     setSaving(false)
+  }
+
+  const closeInviteModal = () => {
+    setPanel('none')
+    setCreatedInvite(null)
+    setInviteEmail('')
+    setInvPosSelect('Member')
+    setInvPosCustom('')
+    setInviteError('')
   }
 
   const revokeInvite = async (id: string) => {
@@ -286,7 +301,7 @@ export default function MembersPage() {
             {canManageMembers && (
               <>
                 <button
-                  onClick={() => setPanel(panel === 'invite' ? 'none' : 'invite')}
+                  onClick={() => { setPanel(panel === 'invite' ? 'none' : 'invite'); setCreatedInvite(null) }}
                   className="btn-ghost"
                 >
                   Invite Member
@@ -535,34 +550,91 @@ export default function MembersPage() {
       {/* ── Invite modal ─────────────────────────────────────────────────── */}
       {panel === 'invite' && canManageMembers && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) closeInviteModal() }}
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
           <div className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
             style={{ animation: 'modalIn 200ms ease-out' }}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D]">
               <h2 className="text-[15px] font-semibold text-white">Invite Member</h2>
-              <button onClick={() => setPanel('none')}
+              <button onClick={closeInviteModal}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors">
                 <X size={14} />
               </button>
             </div>
-            <div className="px-6 py-6 space-y-4">
-              <p className="text-[#8B949E] text-sm">Send them a link to create their account and join the chapter.</p>
-              <div>
-                <label className="label block mb-2">Email</label>
-                <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="member@chapter.com" className="field" autoFocus />
+
+            {createdInvite ? (
+              /* ── Link created state ── */
+              <div className="px-6 py-6 space-y-5">
+                <div className="flex flex-col items-center text-center gap-2 py-2">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1"
+                    style={{ background: 'rgba(63,184,140,0.12)' }}>
+                    <Mail size={18} className="text-[#3FB88C]" />
+                  </div>
+                  <p className="text-white text-[15px] font-semibold">Invite link created</p>
+                  <p className="text-[#8B949E] text-sm">Share this link with the new member.</p>
+                </div>
+
+                {/* Link copy row */}
+                <div className="flex items-center gap-2 bg-[#0D1117] border border-[#21262D] rounded-lg px-3 py-2.5">
+                  <p className="flex-1 font-mono text-[12px] text-[#8B949E] truncate">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/join/${createdInvite.token}` : `/join/${createdInvite.token}`}
+                  </p>
+                  <button
+                    onClick={() => copyInviteLink(createdInvite.token)}
+                    className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-md border transition-all duration-150 ${
+                      copiedToken === createdInvite.token
+                        ? 'border-[#3FB88C]/30 bg-[rgba(63,184,140,0.08)] text-[#3FB88C]'
+                        : 'border-[#21262D] text-[#8B949E] hover:text-white hover:border-[#30363D]'
+                    }`}
+                  >
+                    {copiedToken === createdInvite.token ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                {createdInvite.email && (
+                  <p className="text-[#8B949E] text-xs text-center">
+                    Invite for <span className="text-white font-mono">{createdInvite.email}</span> · {createdInvite.position ?? 'Member'}
+                  </p>
+                )}
+                {!createdInvite.email && (
+                  <p className="text-[#8B949E] text-xs text-center">
+                    Position: {createdInvite.position ?? 'Member'}
+                  </p>
+                )}
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={() => { setCreatedInvite(null); setInviteEmail(''); setInvPosSelect('Member'); setInvPosCustom('') }}
+                    className="flex-1 btn-ghost"
+                  >
+                    Invite Another
+                  </button>
+                  <button onClick={closeInviteModal} className="flex-1 btn-primary">
+                    Done
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="label block mb-2">Position</label>
-                <PositionSelector sel={invPosSelect} setSel={setInvPosSelect} custom={invPosCustom} setCustom={setInvPosCustom} />
+            ) : (
+              /* ── Form state ── */
+              <div className="px-6 py-6 space-y-4">
+                <p className="text-[#8B949E] text-sm">Generate a link for someone to create their account and join the chapter.</p>
+                <div>
+                  <label className="label block mb-2">Position</label>
+                  <PositionSelector sel={invPosSelect} setSel={setInvPosSelect} custom={invPosCustom} setCustom={setInvPosCustom} />
+                </div>
+                <div>
+                  <label className="label block mb-2">Email</label>
+                  <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="member@chapter.com" className="field" autoFocus />
+                </div>
+                {inviteError && (
+                  <p className="text-[#E5484D] text-xs border border-[#E5484D]/20 bg-[#E5484D]/5 rounded-lg px-3 py-2">{inviteError}</p>
+                )}
+                <button onClick={sendInvite} disabled={saving || !inviteEmail.trim()} className="btn-primary w-full">
+                  {saving ? 'Creating…' : 'Generate Invite Link'}
+                </button>
               </div>
-              {inviteError && (
-                <p className="text-[#E5484D] text-xs border border-[#E5484D]/20 bg-[#E5484D]/5 rounded-lg px-3 py-2">{inviteError}</p>
-              )}
-              <button onClick={sendInvite} disabled={saving || !inviteEmail.trim()} className="btn-primary w-full">
-                {saving ? 'Creating…' : 'Create Invite Link'}
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
