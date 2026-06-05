@@ -58,7 +58,7 @@ function PositionBadge({ position, role }: { position: string; role: string }) {
 }
 
 export default function MembersPage() {
-  const { chapterId, user, can } = useAuth()
+  const { chapterId, user, chapter, member: currentMember, can } = useAuth()
   const canManageMembers = can('members_write')
   const canEditPositions = can('positions_write')
 
@@ -167,6 +167,17 @@ export default function MembersPage() {
     } else if (data) {
       setInvites(prev => [data as PendingInvite, ...prev])
       setCreatedInvite(data as PendingInvite)
+      // Fire-and-forget email — don't block the UI on delivery
+      fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          token: data.token,
+          chapterName: chapter?.name,
+          inviterName: currentMember?.name ?? user?.email,
+        }),
+      })
     }
     setSaving(false)
   }
@@ -182,8 +193,13 @@ export default function MembersPage() {
 
   const revokeInvite = async (id: string) => {
     if (!supabase) return
-    await supabase.from('chapter_invites').delete().eq('id', id)
-    setInvites(prev => prev.filter(i => i.id !== id))
+    const { error } = await supabase.from('chapter_invites').delete().eq('id', id)
+    if (!error) {
+      setInvites(prev => prev.filter(i => i.id !== id))
+    } else {
+      console.error('Failed to revoke invite:', error)
+      alert('Failed to revoke invite. Please try again.')
+    }
   }
 
   const copyInviteLink = (token: string) => {
