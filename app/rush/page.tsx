@@ -402,7 +402,7 @@ export default function RushPage() {
     )
   }
 
-  if (supabase && !canEdit) {
+  if (supabase && !user) {
     return (
       <DashboardShell>
         <div className="flex flex-1 items-center justify-center min-h-screen px-4">
@@ -410,11 +410,9 @@ export default function RushPage() {
             <Users size={48} strokeWidth={1} className="text-[#8B949E] mx-auto mb-5" />
             <h1 className="text-2xl font-bold text-white mb-2">Members Only</h1>
             <p className="text-[#8B949E] text-sm mb-7 max-w-xs mx-auto">
-              {user ? "Your account doesn't have access to this feature." : 'Sign in to manage the rush list.'}
+              Sign in to view the rush list.
             </p>
-            <Link href="/login" className="btn-primary">
-              {user ? 'Go Back' : 'Sign In →'}
-            </Link>
+            <Link href="/login" className="btn-primary">Sign In →</Link>
           </div>
         </div>
       </DashboardShell>

@@ -56,7 +56,7 @@ function NavItem({
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, member, chapter, signOut } = useAuth()
+  const { user, member, chapter, signOut, isAdmin } = useAuth()
 
   const handleSignOut = async () => {
     await signOut()
@@ -100,7 +100,7 @@ export default function Sidebar() {
           Settings
         </p>
         <ul className="space-y-0.5">
-          {SETTINGS_NAV.map(({ href, label, icon }) => {
+          {SETTINGS_NAV.filter(({ href }) => href !== '/settings' || isAdmin).map(({ href, label, icon }) => {
             const active = pathname === href || (href !== '/' && pathname.startsWith(href))
             return (
               <li key={href}>

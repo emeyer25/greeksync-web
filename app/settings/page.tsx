@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth, type Member } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
-import { X } from 'lucide-react'
+import { Settings, X } from 'lucide-react'
+import Link from 'next/link'
 
 type Tab = 'profile' | 'members' | 'billing' | 'danger'
 
@@ -32,7 +33,7 @@ function getInitials(name: string) {
 }
 
 export default function SettingsPage() {
-  const { chapter, chapterId, isAdmin, can, refreshMember } = useAuth()
+  const { chapter, chapterId, isAdmin, can, refreshMember, loading: authLoading, user } = useAuth()
   const [tab, setTab] = useState<Tab>('profile')
 
   // ── Chapter Profile ───────────────────────────────────────────────────────
@@ -110,6 +111,36 @@ export default function SettingsPage() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+
+  if (supabase && authLoading) {
+    return (
+      <DashboardShell>
+        <div className="max-w-4xl mx-auto px-6 py-12 space-y-4">
+          <div className="h-8 w-48 rounded bg-[#21262D] animate-pulse" />
+          <div className="h-4 w-32 rounded bg-[#21262D] animate-pulse" />
+        </div>
+      </DashboardShell>
+    )
+  }
+
+  if (supabase && !isAdmin) {
+    return (
+      <DashboardShell>
+        <div className="flex flex-1 items-center justify-center min-h-screen px-4">
+          <div className="text-center">
+            <Settings size={48} strokeWidth={1} className="text-[#8B949E] mx-auto mb-5" />
+            <h1 className="text-2xl font-bold text-white mb-2">Admins Only</h1>
+            <p className="text-[#8B949E] text-sm mb-7 max-w-xs mx-auto">
+              {user ? "You need admin access to manage chapter settings." : 'Sign in as an admin to access settings.'}
+            </p>
+            <Link href={user ? '/' : '/login'} className="btn-primary">
+              {user ? 'Go Back' : 'Sign In →'}
+            </Link>
+          </div>
+        </div>
+      </DashboardShell>
+    )
+  }
 
   return (
     <DashboardShell>
