@@ -70,6 +70,7 @@ function StatusBadge({ status }: { status: Status }) {
 export default function RushPage() {
   const { canEdit, loading: authLoading, user, chapterId, can } = useAuth()
   const canEditRushees = can('rushees_write')
+  const canManageMembers = can('members_write')
   const [rushees, setRushees] = useState<Rushee[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -105,6 +106,11 @@ export default function RushPage() {
 
   const [sortField, setSortField] = useState<'name' | 'status' | 'created_at'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const [showDropped, setShowDropped] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<Status | ''>('')
+  const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null)
 
   useEffect(() => {
     fetchRushees()
@@ -256,6 +262,26 @@ export default function RushPage() {
     setSaving(false)
   }
 
+  async function handleBulkStatus() {
+    if (!supabase || !bulkStatus) return
+    const ids = [...selectedIds]
+    await supabase.from('rushees').update({ status: bulkStatus }).in('id', ids)
+    setRushees(prev => prev.map(r => selectedIds.has(r.id) ? { ...r, status: bulkStatus as Status } : r))
+    setSelectedIds(new Set())
+    setBulkStatus('')
+  }
+
+  async function handleBulkDelete() {
+    if (!supabase) return
+    const ids = [...selectedIds]
+    const names = rushees.filter(r => ids.includes(r.id)).map(r => r.name).join(', ')
+    if (!confirm(`Remove ${ids.length} rushee${ids.length > 1 ? 's' : ''} from the rush list?\n${names}`)) return
+    await supabase.from('rushees').delete().in('id', ids)
+    setRushees(prev => prev.filter(r => !selectedIds.has(r.id)))
+    if (selectedRushee && selectedIds.has(selectedRushee.id)) closePanel()
+    setSelectedIds(new Set())
+  }
+
   async function handleDelete(id: string, name: string) {
     if (!supabase) return
     if (!confirm(`Remove ${name} from the rush list?`)) return
@@ -268,6 +294,23 @@ export default function RushPage() {
     if (!supabase) return
     await supabase.from('rushees').update({ status }).eq('id', id)
     setRushees(prev => prev.map(r => r.id === id ? { ...r, status } : r))
+  }
+
+  const [addingToRoster, setAddingToRoster] = useState(false)
+  async function addToRoster(rushee: Rushee) {
+    if (!supabase || !chapterId) return
+    if (!confirm(`Add ${rushee.name} to the roster as "Not Initiated"?`)) return
+    setAddingToRoster(true)
+    const { error } = await supabase.from('members').insert({
+      chapter_id: chapterId,
+      name: rushee.name,
+      email: null,
+      role: 'member',
+      position: 'Not Initiated',
+    })
+    setAddingToRoster(false)
+    if (error) { alert('Failed to add to roster: ' + error.message); return }
+    alert(`${rushee.name} has been added to the roster.`)
   }
 
   function openPanel(r: Rushee) {
@@ -321,6 +364,7 @@ export default function RushPage() {
   }
 
   const filtered = rushees
+    .filter(r => showDropped || r.status !== 'Dropped')
     .filter(r =>
       r.name.toLowerCase().includes(search.toLowerCase()) ||
       (r.hometown ?? '').toLowerCase().includes(search.toLowerCase())
@@ -562,15 +606,27 @@ export default function RushPage() {
           </div>
         )}
 
-        {/* Search */}
-        <div className="mb-4">
+        {/* Search + filters */}
+        <div className="flex gap-2 mb-4">
           <input
             type="text"
             placeholder="Search by name or hometown…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="field"
+            className="field flex-1"
           />
+          {rushees.some(r => r.status === 'Dropped') && (
+            <button
+              onClick={() => setShowDropped(v => !v)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors duration-150 whitespace-nowrap ${
+                showDropped
+                  ? 'bg-[rgba(139,148,158,0.1)] border-[#30363D] text-white'
+                  : 'border-[#21262D] text-[#8B949E] hover:text-white hover:border-[#30363D]'
+              }`}
+            >
+              {showDropped ? 'Hide Dropped' : `Show Dropped (${rushees.filter(r => r.status === 'Dropped').length})`}
+            </button>
+          )}
         </div>
 
         {/* Loading skeleton */}
@@ -604,76 +660,180 @@ export default function RushPage() {
             )}
           </div>
         ) : (
-          <div className="bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-[2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-2.5 border-b border-[#21262D]">
-              {[
-                { key: 'name', label: 'Name' },
-                { key: null, label: 'Contact' },
-                { key: 'status', label: 'Status' },
-                { key: null, label: 'Notes' },
-                { key: 'created_at', label: 'Added' },
-              ].map(col => (
-                <button
-                  key={col.label}
-                  onClick={() => col.key && toggleSort(col.key as any)}
-                  className={`text-left label flex items-center gap-1 ${col.key ? 'hover:text-white transition-colors' : ''}`}
+          <>
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-[#1C2128] border border-[#21262D] rounded-xl mb-3">
+                <span className="text-xs text-[#8B949E]">{selectedIds.size} selected</span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <select
+                    value={bulkStatus}
+                    onChange={e => setBulkStatus(e.target.value as Status | '')}
+                    className="field py-1 text-xs"
+                    style={{ width: 'auto' }}
+                  >
+                    <option value="">Move to…</option>
+                    {STATUSES.map(s => <option key={s} value={s}>{STATUS_BADGE[s].label}</option>)}
+                  </select>
+                  <button
+                    disabled={!bulkStatus}
+                    onClick={handleBulkStatus}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-400/10 transition-colors duration-150"
+                  >
+                    Remove
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="w-6 h-6 flex items-center justify-center rounded text-[#8B949E] hover:text-white transition-colors duration-150"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Transparent overlay to close inline status menus */}
+            {openStatusMenu && (
+              <div className="fixed inset-0 z-10" onClick={() => setOpenStatusMenu(null)} />
+            )}
+
+            <div className="bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
+              {/* Table header */}
+              <div className="grid grid-cols-[32px_2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-2.5 border-b border-[#21262D] items-center">
+                {canEditRushees && (
+                  <input
+                    type="checkbox"
+                    checked={tableSorted.length > 0 && tableSorted.every(r => selectedIds.has(r.id))}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedIds(new Set(tableSorted.map(r => r.id)))
+                      else setSelectedIds(new Set())
+                    }}
+                    className="w-3.5 h-3.5 accent-[#FF6B4A] cursor-pointer"
+                    onClick={e => e.stopPropagation()}
+                  />
+                )}
+                {[
+                  { key: 'name', label: 'Name' },
+                  { key: null, label: 'Contact' },
+                  { key: 'status', label: 'Status' },
+                  { key: null, label: 'Notes' },
+                  { key: 'created_at', label: 'Added' },
+                ].map(col => (
+                  <button
+                    key={col.label}
+                    onClick={() => col.key && toggleSort(col.key as any)}
+                    className={`text-left label flex items-center gap-1 ${col.key ? 'hover:text-white transition-colors' : ''}`}
+                  >
+                    {col.label}
+                    {col.key && sortField === col.key && (
+                      sortDir === 'asc'
+                        ? <ChevronUp size={11} className="text-[#FF6B4A]" />
+                        : <ChevronDown size={11} className="text-[#FF6B4A]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Table rows */}
+              {tableSorted.map(rushee => (
+                <div
+                  key={rushee.id}
+                  className={`grid grid-cols-[32px_2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#1C2128] items-center cursor-pointer transition-colors duration-150 ${
+                    selectedIds.has(rushee.id) ? 'bg-[rgba(255,107,74,0.04)]' : ''
+                  }`}
+                  onClick={() => openPanel(rushee)}
                 >
-                  {col.label}
-                  {col.key && sortField === col.key && (
-                    sortDir === 'asc'
-                      ? <ChevronUp size={11} className="text-[#FF6B4A]" />
-                      : <ChevronDown size={11} className="text-[#FF6B4A]" />
-                  )}
-                </button>
+                  {/* Checkbox */}
+                  {canEditRushees ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(rushee.id)}
+                      onChange={e => {
+                        setSelectedIds(prev => {
+                          const s = new Set(prev)
+                          if (e.target.checked) s.add(rushee.id)
+                          else s.delete(rushee.id)
+                          return s
+                        })
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      className="w-3.5 h-3.5 accent-[#FF6B4A] cursor-pointer"
+                    />
+                  ) : <div />}
+
+                  {/* Name */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    {selectedEvent && (
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleContact(rushee.id) }}
+                        disabled={toggling === rushee.id}
+                        className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-all duration-150 ${
+                          contactedIds.has(rushee.id)
+                            ? 'bg-[rgba(255,107,74,0.12)] border-[#FF6B4A] text-[#FF6B4A]'
+                            : 'border-[#30363D] text-transparent hover:border-[#8B949E]'
+                        }`}
+                      >
+                        {contactedIds.has(rushee.id) && <span className="text-[8px] font-bold">✓</span>}
+                      </button>
+                    )}
+                    <Avatar rushee={rushee} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{rushee.name}</p>
+                      {rushee.hometown && <p className="text-[#8B949E] text-xs truncate">{rushee.hometown}</p>}
+                    </div>
+                  </div>
+
+                  {/* Contact */}
+                  <p className="font-mono text-[#8B949E] text-xs truncate">{rushee.phone ?? '—'}</p>
+
+                  {/* Status — inline picker */}
+                  <div className="relative" onClick={e => e.stopPropagation()}>
+                    {canEditRushees ? (
+                      <button
+                        onClick={() => setOpenStatusMenu(v => v === rushee.id ? null : rushee.id)}
+                        className="hover:opacity-80 transition-opacity duration-150"
+                      >
+                        <StatusBadge status={rushee.status} />
+                      </button>
+                    ) : (
+                      <StatusBadge status={rushee.status} />
+                    )}
+                    {openStatusMenu === rushee.id && (
+                      <div className="absolute left-0 top-full mt-1 z-20 bg-[#1C2128] border border-[#30363D] rounded-lg overflow-hidden shadow-xl min-w-[148px]">
+                        {STATUSES.map(s => (
+                          <button
+                            key={s}
+                            onClick={async () => { await handleStatusChange(rushee.id, s); setOpenStatusMenu(null) }}
+                            className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[#21262D] transition-colors duration-100 ${
+                              s === rushee.status ? 'text-white' : 'text-[#8B949E]'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATUS_BADGE[s].color }} />
+                            {STATUS_BADGE[s].label}
+                            {s === rushee.status && <span className="ml-auto text-[#FF6B4A] text-[10px]">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  <p className="text-[#8B949E] text-xs truncate">{rushee.notes ?? '—'}</p>
+
+                  {/* Added date */}
+                  <p className="font-mono text-[#8B949E] text-xs">
+                    {new Date(rushee.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </p>
+                </div>
               ))}
             </div>
-
-            {/* Table rows */}
-            {tableSorted.map(rushee => (
-              <div
-                key={rushee.id}
-                className="grid grid-cols-[2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#1C2128] items-center cursor-pointer transition-colors duration-150"
-                onClick={() => openPanel(rushee)}
-              >
-                {/* Name */}
-                <div className="flex items-center gap-3 min-w-0">
-                  {selectedEvent && (
-                    <button
-                      onClick={e => { e.stopPropagation(); toggleContact(rushee.id) }}
-                      disabled={toggling === rushee.id}
-                      className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-all duration-150 ${
-                        contactedIds.has(rushee.id)
-                          ? 'bg-[rgba(255,107,74,0.12)] border-[#FF6B4A] text-[#FF6B4A]'
-                          : 'border-[#30363D] text-transparent hover:border-[#8B949E]'
-                      }`}
-                    >
-                      {contactedIds.has(rushee.id) && <span className="text-[8px] font-bold">✓</span>}
-                    </button>
-                  )}
-                  <Avatar rushee={rushee} size="sm" />
-                  <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{rushee.name}</p>
-                    {rushee.hometown && <p className="text-[#8B949E] text-xs truncate">{rushee.hometown}</p>}
-                  </div>
-                </div>
-
-                {/* Contact */}
-                <p className="font-mono text-[#8B949E] text-xs truncate">{rushee.phone ?? '—'}</p>
-
-                {/* Status */}
-                <StatusBadge status={rushee.status} />
-
-                {/* Notes */}
-                <p className="text-[#8B949E] text-xs truncate">{rushee.notes ?? '—'}</p>
-
-                {/* Added date */}
-                <p className="font-mono text-[#8B949E] text-xs">
-                  {new Date(rushee.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </p>
-              </div>
-            ))}
-          </div>
+          </>
         )}
 
       </div>
@@ -881,11 +1041,22 @@ export default function RushPage() {
                   Remove from Rush List
                 </button>
               </div>
-            ) : canEditRushees ? (
-              <div className="px-6 py-4 border-t border-[#21262D]">
-                <button onClick={() => setEditMode(true)} className="btn-primary w-full">
-                  Edit PNM
-                </button>
+            ) : (canEditRushees || (canManageMembers && selectedRushee.status === 'Bids Accepted')) ? (
+              <div className="px-6 py-4 border-t border-[#21262D] space-y-2">
+                {canEditRushees && (
+                  <button onClick={() => setEditMode(true)} className="btn-primary w-full">
+                    Edit PNM
+                  </button>
+                )}
+                {canManageMembers && selectedRushee.status === 'Bids Accepted' && (
+                  <button
+                    onClick={() => addToRoster(selectedRushee)}
+                    disabled={addingToRoster}
+                    className="w-full px-4 py-2 rounded-lg text-sm font-medium border border-[#3FB88C] text-[#3FB88C] hover:bg-[#3FB88C]/10 transition-colors disabled:opacity-50"
+                  >
+                    {addingToRoster ? 'Adding…' : 'Add to Roster'}
+                  </button>
+                )}
               </div>
             ) : null}
           </div>

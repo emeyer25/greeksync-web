@@ -513,7 +513,6 @@ export default function DuesPage() {
 
   async function sendReminders() {
     setSendingReminders(true)
-    console.log(`[dues] send reminders to ${unpaidCount} unpaid members in period "${selectedPeriod?.name}"`)
     await new Promise(r => setTimeout(r, 600))
     setSendingReminders(false)
     setShowReminders(false)

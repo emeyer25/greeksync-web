@@ -9,13 +9,13 @@ import { LayoutGrid, List, X, Mail, ChevronUp, ChevronDown } from 'lucide-react'
 const PRESET_POSITIONS = [
   'President', 'Vice President', 'Treasurer', 'Secretary',
   'Social Chair', 'Rush Chair', 'Risk Management', 'Philanthropy Chair',
-  'Alumni Relations', 'Member',
+  'Alumni Relations', 'Member', 'Not Initiated',
 ]
 
 const POSITION_ORDER = [
   'President', 'Vice President', 'Treasurer', 'Secretary',
   'Social Chair', 'Rush Chair', 'Risk Management', 'Philanthropy Chair',
-  'Alumni Relations', 'Member',
+  'Alumni Relations', 'Member', 'Not Initiated',
 ]
 
 function getInitials(name: string) {

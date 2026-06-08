@@ -60,9 +60,7 @@ export default function SettingsPage() {
     if (!supabase || !chapterId || !chapterName.trim()) return
     setSaving(true)
     setSaveError(null)
-    console.log('Saving chapter name:', chapterName.trim(), 'for chapterId:', chapterId)
-    const { error, data } = await supabase.from('chapters').update({ name: chapterName.trim() }).eq('id', chapterId).select()
-    console.log('Update result:', { error, data })
+    const { error } = await supabase.from('chapters').update({ name: chapterName.trim() }).eq('id', chapterId)
     if (error) {
       console.error('Chapter update failed:', error)
       setSaveError(error.message)
