@@ -71,14 +71,19 @@ export default function SettingsPage() {
     if (!supabase || !chapterId || !chapterName.trim()) return
     setSaving(true)
     setSaveError(null)
-    console.log('saveProfile: updating chapter', chapterId, { name: chapterName.trim(), greek_letters: greekLetters.trim(), school: school.trim(), description: description.trim() })
-    const { error } = await supabase.from('chapters').update({
+    console.log('saveProfile: updating chapter', chapterId)
+    const { data: updated, error } = await supabase.from('chapters').update({
       name: chapterName.trim(),
       greek_letters: greekLetters.trim() || null,
       school: school.trim() || null,
       description: description.trim() || null,
-    }).eq('id', chapterId)
-    console.log('saveProfile: update result', error ?? 'ok')
+    }).eq('id', chapterId).select()
+    console.log('saveProfile: update result', { error, updated })
+    if (!error && (!updated || updated.length === 0)) {
+      setSaveError('Permission denied — RLS blocked the update. Check that your account has admin role in the members table.')
+      setSaving(false)
+      return
+    }
     if (error) {
       console.error('Chapter update failed:', error)
       setSaveError(error.message)
