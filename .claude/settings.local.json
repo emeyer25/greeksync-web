@@ -22,7 +22,23 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/calendar)",
       "Bash(find /Users/ericmeyer/chapterai/lib -type f -name *.ts -o -name *.tsx)",
       "Bash(grep -r \"chapters.*update\\\\|\\\\.from.*chapters\" /Users/ericmeyer/chapterai --include=*.ts --include=*.tsx)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npx tsc *)",
+      "Bash(git -C /Users/ericmeyer/chapterai diff --stat HEAD)",
+      "Bash(git -C /Users/ericmeyer/chapterai diff --name-only HEAD)",
+      "Bash(git -C /Users/ericmeyer/chapterai status --short)",
+      "Bash(sed -i '' \"s|from '@/types/event-generator'|from '@/types/events'|g\" \"/Users/ericmeyer/chapterai/app/events/[id]/page.tsx\")",
+      "Bash(node_modules/.bin/next --version)",
+      "Bash(curl -s \"http://localhost:3000/api/instagram?username=zuck\")",
+      "Bash(npm list *)",
+      "Bash(kill 8045)",
+      "Bash(kill 11642)",
+      "Bash(cat /Users/ericmeyer/.claude/projects/-Users-ericmeyer-chapterai/memory/MEMORY.md 2>/dev/null; git diff --stat HEAD~3 HEAD 2>/dev/null | head -30)"
     ]
   }
 }

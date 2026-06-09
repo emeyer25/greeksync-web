@@ -131,7 +131,15 @@ export default function EventPage() {
     const ext = file.name.split('.').pop()
     const path = `${event.chapter_id ?? 'global'}/${id}/flyer.${ext}`
     const { error: upErr } = await supabase.storage.from('event-flyers').upload(path, file, { upsert: true })
-    if (upErr) { setFlyerError(upErr.message); setUploadingFlyer(false); return }
+    if (upErr) {
+      setFlyerError(
+        upErr.message.toLowerCase().includes('security') || upErr.message.toLowerCase().includes('policy') || upErr.statusCode === '403' || upErr.statusCode === '401'
+          ? "You don't have permission to upload a flyer for this event."
+          : 'Upload failed. Please try again.'
+      )
+      setUploadingFlyer(false)
+      return
+    }
     const { data: { publicUrl } } = supabase.storage.from('event-flyers').getPublicUrl(path)
     await supabase.from('events').update({ flyer_url: publicUrl }).eq('id', id)
     setEvent(prev => prev ? { ...prev, flyer_url: publicUrl } : null)

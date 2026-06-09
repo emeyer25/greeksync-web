@@ -8,6 +8,7 @@ export interface Chapter {
   id: string
   name: string
   slug: string
+  super_admin_id: string | null
 }
 
 export interface Member {
@@ -39,6 +40,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>
   canEdit: boolean
   isAdmin: boolean
+  isSuperAdmin: boolean
   can: (permission: string) => boolean
   refreshMember: () => Promise<void>
 }
@@ -53,6 +55,7 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: async () => {},
   canEdit: false,
   isAdmin: false,
+  isSuperAdmin: false,
   can: () => false,
   refreshMember: async () => {},
 })
@@ -95,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.chapter_id) {
       const { data: chapterData } = await supabase
         .from('chapters')
-        .select('id, name, slug')
+        .select('id, name, slug, super_admin_id')
         .eq('id', data.chapter_id)
         .maybeSingle()
       setChapter(chapterData as Chapter | null)
@@ -154,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = !!(user && member?.role === 'admin')
+  const isSuperAdmin = !!(user && chapter?.super_admin_id && user.id === chapter.super_admin_id)
   const canEdit = !supabase || !!(user && member && (member.role === 'admin' || member.role === 'editor'))
 
   // can() checks: admins have everything, others check their explicit permissions
@@ -174,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, member, chapter, chapterId,
-      loading, signIn, signOut, canEdit, isAdmin, can,
+      loading, signIn, signOut, canEdit, isAdmin, isSuperAdmin, can,
       refreshMember,
     }}>
       {children}

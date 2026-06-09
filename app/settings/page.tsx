@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth, type Member } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
-import { Settings, X } from 'lucide-react'
+import { Settings, X, Crown, Lock, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
+import MemberDetailModal, { ROLE_DEFAULT_PERMISSIONS } from '@/components/MemberDetailModal'
 
 type Tab = 'profile' | 'members' | 'billing' | 'danger'
 
@@ -28,12 +29,18 @@ const ROLE_BADGE: Record<string, { bg: string; color: string }> = {
   member: { bg: 'rgba(139,148,158,0.15)', color: '#8B949E' },
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Admin',
+  editor: 'Officer',
+  member: 'Member',
+}
+
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
 export default function SettingsPage() {
-  const { chapter, chapterId, isAdmin, can, refreshMember, loading: authLoading, user } = useAuth()
+  const { chapter, chapterId, isAdmin, isSuperAdmin, can, refreshMember, loading: authLoading, user } = useAuth()
   const [tab, setTab] = useState<Tab>('profile')
 
   // ── Chapter Profile ───────────────────────────────────────────────────────
@@ -76,11 +83,12 @@ export default function SettingsPage() {
   }
 
   // ── Members & Roles ───────────────────────────────────────────────────────
-  const [members, setMembers]             = useState<Member[]>([])
+  const [members, setMembers]               = useState<Member[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null)
 
   useEffect(() => {
-    if (tab === 'members') loadMembers()
+    if (tab === 'members' || tab === 'danger') loadMembers()
   }, [tab, chapterId])
 
   const loadMembers = async () => {
@@ -91,10 +99,56 @@ export default function SettingsPage() {
     setMembersLoading(false)
   }
 
+  // Returns true if the current user can edit the target member's role
+  const canChangeRoleOf = (target: Member): boolean => {
+    const superAdminUserId = chapter?.super_admin_id
+    const currentUserId = user?.id
+
+    // Super admin row: only they themselves can change it
+    if (target.user_id === superAdminUserId) {
+      return currentUserId === superAdminUserId
+    }
+
+    // Another admin's role: only the super admin can change it
+    if (target.role === 'admin') {
+      return currentUserId === superAdminUserId
+    }
+
+    // Officer / Member: any admin (settings page is admin-only)
+    return true
+  }
+
   const updateMemberRole = async (memberId: string, role: string) => {
     if (!supabase) return
-    await supabase.from('members').update({ role }).eq('id', memberId)
-    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: role as Member['role'] } : m))
+    const newPerms = ROLE_DEFAULT_PERMISSIONS[role] ?? []
+    await supabase.from('members').update({ role, permissions: newPerms }).eq('id', memberId)
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: role as Member['role'], permissions: newPerms } : m))
+  }
+
+  // ── Transfer Super Admin ──────────────────────────────────────────────────
+  const [transferTarget, setTransferTarget]     = useState('')
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [transferring, setTransferring]         = useState(false)
+
+  const adminSuccessors = members.filter(
+    m => m.role === 'admin' && m.user_id !== user?.id
+  )
+
+  const transferSuperAdmin = async () => {
+    if (!supabase || !chapterId || !transferTarget) return
+    const target = members.find(m => m.id === transferTarget)
+    if (!target?.user_id) return
+    setTransferring(true)
+    const { error } = await supabase
+      .from('chapters')
+      .update({ super_admin_id: target.user_id })
+      .eq('id', chapterId)
+    if (!error) {
+      await refreshMember()
+      setShowTransferModal(false)
+      setTransferTarget('')
+    }
+    setTransferring(false)
   }
 
   // ── Danger Zone ───────────────────────────────────────────────────────────
@@ -263,34 +317,95 @@ export default function SettingsPage() {
                       <p className="label">Member</p>
                       <p className="label">Role</p>
                     </div>
-                    {members.map(m => (
-                      <div key={m.id} className="grid grid-cols-[1fr_auto] gap-4 px-4 py-3 border-b border-[#21262D] items-center last:border-0">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-[#FF6B4A] text-xs font-semibold flex-shrink-0"
-                            style={{ background: 'rgba(255,107,74,0.15)' }}
-                          >
-                            {getInitials(m.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-white text-sm font-medium truncate">{m.name}</p>
-                            {m.position && <p className="text-[#8B949E] text-xs truncate">{m.position}</p>}
-                          </div>
-                        </div>
-                        <select
-                          value={m.role}
-                          onChange={e => updateMemberRole(m.id, e.target.value)}
-                          className="field w-32 h-8 text-xs px-2"
-                          style={{ color: ROLE_BADGE[m.role]?.color ?? '#8B949E' }}
+                    {members.map(m => {
+                      const isSuperAdminRow = m.user_id === chapter?.super_admin_id
+                      const editable = canChangeRoleOf(m)
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="grid grid-cols-[1fr_auto] gap-4 px-4 py-3 border-b border-[#21262D] items-center last:border-0 hover:bg-[#21262D]/40 transition-colors cursor-pointer"
+                          onClick={() => setSelectedMember(m)}
                         >
-                          <option value="admin"  className="text-white bg-[#161B22]">Admin</option>
-                          <option value="editor" className="text-white bg-[#161B22]">Officer</option>
-                          <option value="member" className="text-white bg-[#161B22]">Member</option>
-                        </select>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-[#FF6B4A] text-xs font-semibold flex-shrink-0"
+                              style={{ background: 'rgba(255,107,74,0.15)' }}
+                            >
+                              {getInitials(m.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-white text-sm font-medium truncate">{m.name}</p>
+                                {isSuperAdminRow && (
+                                  <Crown size={12} className="text-[#FF6B4A] flex-shrink-0" aria-label="Super Admin" />
+                                )}
+                              </div>
+                              {m.position && <p className="text-[#8B949E] text-xs truncate">{m.position}</p>}
+                            </div>
+                          </div>
+
+                          {editable ? (
+                            <select
+                              value={m.role}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => updateMemberRole(m.id, e.target.value)}
+                              className="field w-32 h-8 text-xs px-2"
+                              style={{ color: ROLE_BADGE[m.role]?.color ?? '#8B949E' }}
+                            >
+                              <option value="admin"  className="text-white bg-[#161B22]">Admin</option>
+                              <option value="editor" className="text-white bg-[#161B22]">Officer</option>
+                              <option value="member" className="text-white bg-[#161B22]">Member</option>
+                            </select>
+                          ) : (
+                            <div className="w-32 h-8 flex items-center gap-1.5 px-2">
+                              <span
+                                className="text-xs font-medium"
+                                style={{ color: ROLE_BADGE[m.role]?.color ?? '#8B949E' }}
+                              >
+                                {ROLE_LABEL[m.role] ?? m.role}
+                              </span>
+                              <Lock size={11} className="text-[#8B949E] flex-shrink-0" />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                     {members.length === 0 && (
                       <p className="text-[#8B949E] text-sm text-center py-8">No members found.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Transfer Super Admin — visible only to the super admin */}
+                {isSuperAdmin && (
+                  <div className="border border-[#FF6B4A]/20 rounded-xl overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-[#FF6B4A]/15 bg-[rgba(255,107,74,0.04)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A]">
+                        Super Admin
+                      </p>
+                    </div>
+                    <div className="px-5 py-5 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-white text-sm font-semibold">Transfer Super Admin</p>
+                        <p className="text-[#8B949E] text-xs mt-0.5">
+                          Pass your Super Admin designation to another Admin. You will retain your Admin role.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowTransferModal(true)}
+                        disabled={adminSuccessors.length === 0}
+                        className="btn-ghost flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Transfer
+                      </button>
+                    </div>
+                    {adminSuccessors.length === 0 && (
+                      <div className="px-5 pb-4">
+                        <p className="text-[#8B949E] text-xs">
+                          There are no other Admins to transfer to. Promote an Officer or Member to Admin first.
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -310,25 +425,27 @@ export default function SettingsPage() {
 
             {/* ── Danger Zone ──────────────────────────────────────────────── */}
             {tab === 'danger' && (
-              <div className="border border-[#E5484D]/30 rounded-xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-[#E5484D]/20 bg-[#E5484D]/5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#E5484D]">
-                    Danger Zone
-                  </p>
-                </div>
-                <div className="px-6 py-5 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-white text-sm font-semibold">Delete This Chapter</p>
-                    <p className="text-[#8B949E] text-xs mt-0.5">
-                      Permanently delete the chapter and all associated data. This cannot be undone.
+              <div className="space-y-4">
+                <div className="border border-[#E5484D]/30 rounded-xl overflow-hidden">
+                  <div className="px-6 py-4 border-b border-[#E5484D]/20 bg-[#E5484D]/5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#E5484D]">
+                      Danger Zone
                     </p>
                   </div>
-                  <button
-                    onClick={() => setShowDeleteModal(true)}
-                    className="btn-danger flex-shrink-0"
-                  >
-                    Delete Chapter
-                  </button>
+                  <div className="px-6 py-5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-white text-sm font-semibold">Delete This Chapter</p>
+                      <p className="text-[#8B949E] text-xs mt-0.5">
+                        Permanently delete the chapter and all associated data. This cannot be undone.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      className="btn-danger flex-shrink-0"
+                    >
+                      Delete Chapter
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -405,6 +522,78 @@ export default function SettingsPage() {
                 className="btn-danger w-full disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Delete Chapter Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Member Detail modal (Members & Roles tab) ───────────────────── */}
+      {selectedMember && (
+        <MemberDetailModal
+          member={selectedMember}
+          onClose={() => setSelectedMember(null)}
+          onUpdate={updated => {
+            setMembers(prev => prev.map(m => m.id === updated.id ? updated : m))
+            setSelectedMember(updated)
+          }}
+          canEditPositions={true}
+          canManageMembers={true}
+          showRoleEditor={true}
+          superAdminUserId={chapter?.super_admin_id}
+          currentUserIsSuperAdmin={isSuperAdmin}
+        />
+      )}
+
+      {/* ── Transfer Super Admin modal ───────────────────────────────────── */}
+      {showTransferModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget && !transferring) setShowTransferModal(false) }}
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+        >
+          <div className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
+            style={{ animation: 'modalIn 200ms ease-out' }}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D]">
+              <div className="flex items-center gap-2">
+                <Crown size={15} className="text-[#FF6B4A]" />
+                <p className="text-white font-semibold">Transfer Super Admin</p>
+              </div>
+              <button
+                onClick={() => { if (!transferring) { setShowTransferModal(false); setTransferTarget('') } }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="px-6 py-6 space-y-5">
+              <div className="flex items-start gap-3 bg-[rgba(255,107,74,0.06)] border border-[#FF6B4A]/20 rounded-xl p-4">
+                <AlertTriangle size={15} className="text-[#FF6B4A] mt-0.5 flex-shrink-0" />
+                <p className="text-[#8B949E] text-xs leading-relaxed">
+                  You will lose Super Admin privileges. This cannot be undone unless the new Super Admin transfers it back.
+                </p>
+              </div>
+              <div>
+                <label className="label block mb-2">Transfer to</label>
+                <select
+                  value={transferTarget}
+                  onChange={e => setTransferTarget(e.target.value)}
+                  className="field"
+                >
+                  <option value="">Select an Admin…</option>
+                  {adminSuccessors.map(m => (
+                    <option key={m.id} value={m.id} className="text-white bg-[#161B22]">
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={transferSuperAdmin}
+                disabled={!transferTarget || transferring}
+                className="btn-danger w-full disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {transferring ? 'Transferring…' : 'Confirm Transfer'}
               </button>
             </div>
           </div>

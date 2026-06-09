@@ -4,13 +4,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth, type Member } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
+import MemberDetailModal, { PRESET_POSITIONS } from '@/components/MemberDetailModal'
 import { LayoutGrid, List, X, Mail, ChevronUp, ChevronDown } from 'lucide-react'
-
-const PRESET_POSITIONS = [
-  'President', 'Vice President', 'Treasurer', 'Secretary',
-  'Social Chair', 'Rush Chair', 'Risk Management', 'Philanthropy Chair',
-  'Alumni Relations', 'Member', 'Not Initiated',
-]
 
 const POSITION_ORDER = [
   'President', 'Vice President', 'Treasurer', 'Secretary',
@@ -20,6 +15,22 @@ const POSITION_ORDER = [
 
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+}
+
+function PositionSelector({ sel, setSel, custom, setCustom }: {
+  sel: string; setSel: (v: string) => void; custom: string; setCustom: (v: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <select value={sel} onChange={e => setSel(e.target.value)} className="field">
+        {PRESET_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom__">Other (custom title)…</option>
+      </select>
+      {sel === '__custom__' && (
+        <input value={custom} onChange={e => setCustom(e.target.value)} placeholder="Enter custom title" className="field" autoFocus />
+      )}
+    </div>
+  )
 }
 
 interface PendingInvite {
@@ -32,13 +43,6 @@ interface PendingInvite {
   expires_at: string | null
   used_at: string | null
 }
-
-const PERMISSION_CHIPS = [
-  { key: 'calendar_write', label: 'Social',   desc: 'Can add and edit events' },
-  { key: 'rushees_write',  label: 'Rush',     desc: 'Can add and edit rushees' },
-  { key: 'members_write',  label: 'Members',  desc: 'Can invite and remove members' },
-  { key: 'positions_write',label: 'Titles',   desc: 'Can assign positions to others' },
-]
 
 function PositionBadge({ position, role }: { position: string; role: string }) {
   if (role === 'admin') {
@@ -86,10 +90,6 @@ export default function MembersPage() {
   const [createdInvite, setCreatedInvite] = useState<PendingInvite | null>(null)
 
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
-  const [drawerPosSelect, setDrawerPosSelect] = useState('')
-  const [drawerPosCustom, setDrawerPosCustom] = useState('')
-  const [savingPos, setSavingPos] = useState(false)
-  const [savedPos, setSavedPos] = useState(false)
 
   useEffect(() => { loadData() }, [chapterId])
 
@@ -113,18 +113,7 @@ export default function MembersPage() {
   const resolvePos = (sel: string, custom: string) =>
     sel === '__custom__' ? custom.trim() || 'Member' : sel
 
-  const openDrawer = (m: Member) => {
-    setSelectedMember(m)
-    setSavedPos(false)
-    if (PRESET_POSITIONS.includes(m.position)) {
-      setDrawerPosSelect(m.position)
-      setDrawerPosCustom('')
-    } else {
-      setDrawerPosSelect('__custom__')
-      setDrawerPosCustom(m.position)
-    }
-  }
-
+  const openDrawer = (m: Member) => setSelectedMember(m)
   const closeDrawer = () => setSelectedMember(null)
 
   const addMember = async () => {
@@ -210,29 +199,28 @@ export default function MembersPage() {
 
   const deleteMember = async (id: string) => {
     if (!supabase) return
+    const target = members.find(m => m.id === id)
+
+    // Graduation safeguard: if removing the super admin without a transfer,
+    // auto-promote the longest-standing other admin.
+    if (target?.user_id && target.user_id === chapter?.super_admin_id) {
+      const nextAdmin = members
+        .filter(m => m.id !== id && m.role === 'admin')
+        .sort((a, b) => (a as any).created_at < (b as any).created_at ? -1 : 1)[0]
+
+      if (nextAdmin?.user_id && chapter?.id) {
+        await supabase
+          .from('chapters')
+          .update({ super_admin_id: nextAdmin.user_id })
+          .eq('id', chapter.id)
+        // In-app notification shown via alert (activity log not yet implemented)
+        alert(`Super Admin has been automatically transferred to ${nextAdmin.name} because the previous Super Admin was removed.`)
+      }
+    }
+
     await supabase.from('members').delete().eq('id', id)
     setMembers(prev => prev.filter(m => m.id !== id))
     closeDrawer()
-  }
-
-  const togglePermission = async (id: string, perm: string, current: string[]) => {
-    if (!supabase) return
-    const updated = current.includes(perm) ? current.filter(p => p !== perm) : [...current, perm]
-    await supabase.from('members').update({ permissions: updated }).eq('id', id)
-    setMembers(prev => prev.map(m => m.id === id ? { ...m, permissions: updated } : m))
-    if (selectedMember?.id === id) setSelectedMember(prev => prev ? { ...prev, permissions: updated } : null)
-  }
-
-  const savePosition = async () => {
-    if (!supabase || !selectedMember) return
-    setSavingPos(true)
-    const position = resolvePos(drawerPosSelect, drawerPosCustom)
-    await supabase.from('members').update({ position }).eq('id', selectedMember.id)
-    setMembers(prev => prev.map(m => m.id === selectedMember.id ? { ...m, position } : m))
-    setSelectedMember(prev => prev ? { ...prev, position } : null)
-    setSavingPos(false)
-    setSavedPos(true)
-    setTimeout(() => setSavedPos(false), 2000)
   }
 
   function toggleSort(field: typeof sortField) {
@@ -262,20 +250,6 @@ export default function MembersPage() {
         return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
       })
     : filteredMembers
-
-  const PositionSelector = ({ sel, setSel, custom, setCustom }: {
-    sel: string; setSel: (v: string) => void; custom: string; setCustom: (v: string) => void
-  }) => (
-    <div className="space-y-2">
-      <select value={sel} onChange={e => setSel(e.target.value)} className="field">
-        {PRESET_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-        <option value="__custom__">Other (custom title)…</option>
-      </select>
-      {sel === '__custom__' && (
-        <input value={custom} onChange={e => setCustom(e.target.value)} placeholder="Enter custom title" className="field" autoFocus />
-      )}
-    </div>
-  )
 
   // ── Page ──────────────────────────────────────────────────────────────────
 
@@ -657,147 +631,19 @@ export default function MembersPage() {
 
       {/* ── Member detail modal ───────────────────────────────────────────── */}
       {selectedMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={e => { if (e.target === e.currentTarget) closeDrawer() }}
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
-          <div className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            style={{ animation: 'modalIn 200ms ease-out' }}>
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D] flex-shrink-0">
-              <p className="label">Member Details</p>
-              <button onClick={closeDrawer}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors">
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              {/* Avatar + name */}
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-[#FF6B4A] font-semibold text-xl mb-4"
-                  style={{ background: 'rgba(255,107,74,0.15)' }}>
-                  {getInitials(selectedMember.name)}
-                </div>
-                <p className="text-white text-lg font-semibold">{selectedMember.name}</p>
-                {selectedMember.email && (
-                  <p className="font-mono text-[#8B949E] text-xs mt-1">{selectedMember.email}</p>
-                )}
-                <div className="mt-2">
-                  <PositionBadge position={selectedMember.position} role={selectedMember.role} />
-                </div>
-              </div>
-
-              <div className="h-px bg-[#21262D]" />
-
-              {/* Position editor */}
-              {canEditPositions && selectedMember.role !== 'admin' ? (
-                <div>
-                  <label className="label block mb-2">Position</label>
-                  <PositionSelector sel={drawerPosSelect} setSel={setDrawerPosSelect} custom={drawerPosCustom} setCustom={setDrawerPosCustom} />
-                  {(drawerPosSelect !== (PRESET_POSITIONS.includes(selectedMember.position) ? selectedMember.position : '__custom__') ||
-                    (drawerPosSelect === '__custom__' && drawerPosCustom !== selectedMember.position)) && (
-                    <button
-                      onClick={savePosition}
-                      disabled={savingPos}
-                      className={`mt-2 w-full h-10 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 ${
-                        savedPos
-                          ? 'border border-[#3FB88C]/30 text-[#3FB88C]'
-                          : 'btn-primary'
-                      }`}
-                    >
-                      {savingPos ? 'Saving…' : savedPos ? '✓ Saved' : 'Save Position'}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <label className="label block mb-1">Position</label>
-                  <p className="text-[#8B949E] text-sm">{selectedMember.position}</p>
-                </div>
-              )}
-
-              {/* Privileges */}
-              {canManageMembers && selectedMember.role !== 'admin' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="label block mb-3">Privileges</label>
-                    <div className="space-y-2">
-                      {PERMISSION_CHIPS.filter(c => c.key === 'calendar_write' || c.key === 'rushees_write').map(({ key, label, desc }) => {
-                        const perms = selectedMember.permissions ?? []
-                        const active = perms.includes(key)
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => togglePermission(selectedMember.id, key, perms)}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-all duration-150 ${
-                              active
-                                ? 'border-[#FF6B4A]/20 bg-[rgba(255,107,74,0.06)]'
-                                : 'border-[#21262D] hover:border-[#30363D]'
-                            }`}
-                          >
-                            <div className="text-left">
-                              <p className="text-sm text-white font-medium">{label} Privileges</p>
-                              <p className={`text-xs mt-0.5 ${active ? 'text-[#FF6B4A]/70' : 'text-[#8B949E]'}`}>{desc}</p>
-                            </div>
-                            <div className={`w-8 h-4 rounded-full transition-all duration-200 flex-shrink-0 relative ${active ? 'bg-[#FF6B4A]' : 'bg-[#21262D]'}`}>
-                              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all duration-200 ${active ? 'left-4' : 'left-0.5'}`} />
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="label block mb-3">Admin Privileges</label>
-                    <div className="space-y-2">
-                      {PERMISSION_CHIPS.filter(c => c.key === 'members_write' || c.key === 'positions_write').map(({ key, label, desc }) => {
-                        const perms = selectedMember.permissions ?? []
-                        const active = perms.includes(key)
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => togglePermission(selectedMember.id, key, perms)}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-all duration-150 ${
-                              active
-                                ? 'border-[#FF6B4A]/20 bg-[rgba(255,107,74,0.06)]'
-                                : 'border-[#21262D] hover:border-[#30363D]'
-                            }`}
-                          >
-                            <div className="text-left">
-                              <p className="text-sm text-white font-medium">{label}</p>
-                              <p className={`text-xs mt-0.5 ${active ? 'text-[#FF6B4A]/70' : 'text-[#8B949E]'}`}>{desc}</p>
-                            </div>
-                            <div className={`w-8 h-4 rounded-full transition-all duration-200 flex-shrink-0 relative ${active ? 'bg-[#FF6B4A]' : 'bg-[#21262D]'}`}>
-                              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all duration-200 ${active ? 'left-4' : 'left-0.5'}`} />
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedMember.role === 'admin' && (
-                <p className="text-[#8B949E] text-xs text-center">Admins have full access to everything.</p>
-              )}
-            </div>
-
-            {/* Modal footer */}
-            {canManageMembers && selectedMember.role !== 'admin' && (
-              <div className="px-6 py-4 border-t border-[#21262D] flex-shrink-0">
-                <button
-                  onClick={() => { if (confirm(`Remove ${selectedMember.name} from the chapter?`)) deleteMember(selectedMember.id) }}
-                  className="btn-danger w-full"
-                >
-                  Remove from Chapter
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <MemberDetailModal
+          member={selectedMember}
+          onClose={closeDrawer}
+          onUpdate={updated => {
+            setMembers(prev => prev.map(m => m.id === updated.id ? updated : m))
+            setSelectedMember(updated)
+          }}
+          onDelete={canManageMembers ? deleteMember : undefined}
+          canEditPositions={canEditPositions}
+          canManageMembers={canManageMembers}
+          superAdminUserId={chapter?.super_admin_id}
+          currentUserIsSuperAdmin={false}
+        />
       )}
 
     </DashboardShell>
