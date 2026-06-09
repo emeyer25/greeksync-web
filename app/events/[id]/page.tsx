@@ -188,7 +188,7 @@ export default function EventPage() {
   return (
     <DashboardShell>
 
-      <div className="max-w-2xl mx-auto px-6 py-10">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         {/* Back */}
         <Link
           href="/calendar"
@@ -213,7 +213,7 @@ export default function EventPage() {
                   className="field"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label block mb-2">Type</label>
                   <select
@@ -260,7 +260,7 @@ export default function EventPage() {
                   </button>
                 )}
               </div>
-              <h1 className="font-serif text-4xl text-cream font-semibold tracking-wide leading-tight">{event.theme}</h1>
+              <h1 className="font-serif text-2xl sm:text-4xl text-cream font-semibold tracking-wide leading-tight">{event.theme}</h1>
             </div>
           )}
         </div>

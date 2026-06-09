@@ -69,8 +69,8 @@ export default function CalendarView({ events, onAddEvent }: CalendarViewProps) 
 
   return (
     <div className="space-y-5">
-      {/* Calendar grid */}
-      <div className="bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
+      {/* Calendar grid — hidden on mobile, shown on sm+ */}
+      <div className="hidden sm:block bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
 
         {/* Month nav */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D]">

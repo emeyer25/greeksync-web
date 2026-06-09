@@ -43,9 +43,11 @@
 
   .field {
     @apply w-full bg-[#0D1117] border border-[#21262D] rounded-lg h-10 px-3
-           text-white placeholder-[#8B949E] text-[15px]
+           text-white placeholder-[#8B949E]
            focus:outline-none focus:border-[#FF6B4A]
            transition-all duration-200;
+    /* 16px prevents iOS auto-zoom on focus */
+    font-size: 16px;
     box-shadow: none;
   }
   .field:focus {
@@ -117,6 +119,16 @@
     height: 1px;
     background: #21262D;
   }
+}
+
+/* ─── Utilities ─────────────────────────────────────── */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes modalIn {

@@ -198,23 +198,42 @@ export default function SettingsPage() {
 
   return (
     <DashboardShell>
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
         {/* Header */}
-        <div className="mb-10">
+        <div className="mb-6 sm:mb-10">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A] mb-3">
             Chapter Admin
           </p>
-          <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+          <h1 className="text-2xl sm:text-[28px] font-bold text-white leading-tight tracking-tight">
             Chapter Settings
           </h1>
         </div>
 
-        {/* Tabs + content */}
-        <div className="flex gap-8">
+        {/* Mobile horizontal tabs */}
+        <div className="flex sm:hidden overflow-x-auto gap-1 pb-1 mb-6 -mx-4 px-4 scrollbar-hide">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={[
+                'flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 whitespace-nowrap',
+                tab === t.key
+                  ? 'bg-[rgba(255,107,74,0.08)] text-white'
+                  : 'text-[#8B949E] hover:text-white',
+                t.key === 'danger' && tab !== 'danger' ? 'text-[#E5484D]/70' : '',
+              ].join(' ')}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          {/* Vertical tab list */}
-          <nav className="flex-shrink-0 w-44">
+        {/* Desktop: sidebar tabs + content side by side */}
+        <div className="sm:flex sm:gap-8">
+
+          {/* Vertical tab list — desktop only */}
+          <nav className="hidden sm:block flex-shrink-0 w-44">
             <ul className="space-y-0.5">
               {TABS.map(t => (
                 <li key={t.key}>
@@ -385,8 +404,8 @@ export default function SettingsPage() {
                         Super Admin
                       </p>
                     </div>
-                    <div className="px-5 py-5 flex items-center justify-between gap-4">
-                      <div>
+                    <div className="px-5 py-5 flex flex-wrap items-center justify-between gap-4">
+                      <div className="min-w-0">
                         <p className="text-white text-sm font-semibold">Transfer Super Admin</p>
                         <p className="text-[#8B949E] text-xs mt-0.5">
                           Pass your Super Admin designation to another Admin. You will retain your Admin role.
@@ -432,8 +451,8 @@ export default function SettingsPage() {
                       Danger Zone
                     </p>
                   </div>
-                  <div className="px-6 py-5 flex items-center justify-between gap-4">
-                    <div>
+                  <div className="px-6 py-5 flex flex-wrap items-center justify-between gap-4">
+                    <div className="min-w-0">
                       <p className="text-white text-sm font-semibold">Delete This Chapter</p>
                       <p className="text-[#8B949E] text-xs mt-0.5">
                         Permanently delete the chapter and all associated data. This cannot be undone.
@@ -441,7 +460,7 @@ export default function SettingsPage() {
                     </div>
                     <button
                       onClick={() => setShowDeleteModal(true)}
-                      className="btn-danger flex-shrink-0"
+                      className="btn-danger flex-shrink-0 w-full sm:w-auto"
                     >
                       Delete Chapter
                     </button>

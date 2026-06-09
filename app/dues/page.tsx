@@ -580,10 +580,10 @@ export default function DuesPage() {
   if (loading) {
     return (
       <DashboardShell>
-        <div className="p-8 max-w-[1200px] mx-auto animate-pulse space-y-6">
+        <div className="p-4 sm:p-8 max-w-[1200px] mx-auto animate-pulse space-y-6">
           <div className="h-5 w-36 bg-[#21262D] rounded" />
           <div className="h-8 w-72 bg-[#21262D] rounded" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-28 bg-[#161B22] border border-[#21262D] rounded-xl" />
             ))}
@@ -603,16 +603,16 @@ export default function DuesPage() {
     <DashboardShell>
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
-      <div className="p-8 max-w-[1200px] mx-auto">
+      <div className="p-4 sm:p-8 max-w-[1200px] mx-auto">
 
         {/* ── Page header ─────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
           <div>
             <p className="text-[11px] font-medium text-[#FF6B4A] uppercase tracking-[0.08em] mb-1">
               CHAPTER FINANCES
             </p>
             <h1
-              className="text-[28px] font-bold text-white leading-tight"
+              className="text-2xl sm:text-[28px] font-bold text-white leading-tight"
               style={{ fontFamily: 'var(--font-satoshi)' }}
             >
               {selectedPeriod ? `Dues — ${selectedPeriod.name}` : 'Dues'}
@@ -853,7 +853,8 @@ export default function DuesPage() {
 
             {/* Member table */}
             <div className="bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
-              <table className="w-full">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px]">
                 <thead>
                   <tr className="border-b border-[#21262D]">
                     <th className="text-left px-6 py-3 text-[11px] font-medium text-[#8B949E] uppercase tracking-[0.08em]">
@@ -931,6 +932,7 @@ export default function DuesPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </>
         )}
@@ -944,7 +946,7 @@ export default function DuesPage() {
           style={{ background: 'rgba(0,0,0,0.45)' }}
         >
           <div
-            className="absolute right-0 top-0 h-full w-full max-w-[420px] bg-[#161B22] border-l border-[#21262D] flex flex-col"
+            className="absolute right-0 top-0 h-full w-full sm:max-w-[420px] bg-[#161B22] border-l border-[#21262D] flex flex-col"
             style={{ animation: 'slideIn 250ms cubic-bezier(0.4,0,0.2,1)' }}
             onClick={e => e.stopPropagation()}
           >

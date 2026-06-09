@@ -194,7 +194,7 @@ export default function MealsPage() {
   return (
     <DashboardShell>
       <div className="flex-1 overflow-auto">
-        <div className="px-8 py-8">
+        <div className="px-4 sm:px-8 py-6 sm:py-8">
 
           {/* Page header */}
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -202,7 +202,7 @@ export default function MealsPage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A] mb-3 whitespace-nowrap">
                 Chapter Meals
               </p>
-              <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+              <h1 className="text-2xl sm:text-[28px] font-bold text-white leading-tight tracking-tight">
                 Meal Plan
               </h1>
             </div>

@@ -94,14 +94,14 @@ export default function ProfilePage() {
 
   return (
     <DashboardShell>
-      <div className="max-w-md mx-auto px-6 py-12">
+      <div className="max-w-md mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
         {/* Header */}
-        <div className="mb-10">
+        <div className="mb-8 sm:mb-10">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A] mb-3">
             Account
           </p>
-          <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+          <h1 className="text-2xl sm:text-[28px] font-bold text-white leading-tight tracking-tight">
             My Account
           </h1>
         </div>

@@ -71,22 +71,22 @@ export default function CalendarPage() {
 
   return (
     <DashboardShell>
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-10">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8 sm:mb-10">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A] mb-3">
               Chapter Events
             </p>
-            <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-white leading-tight tracking-tight">
               Social Calendar
             </h1>
           </div>
           {canAddEvents && (
             <button
               onClick={() => setShowAdd(v => !v)}
-              className={showAdd ? 'btn-ghost mt-5' : 'btn-primary mt-5'}
+              className={showAdd ? 'btn-ghost' : 'btn-primary'}
             >
               {showAdd ? 'Cancel' : '+ New Event'}
             </button>

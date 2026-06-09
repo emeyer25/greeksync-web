@@ -229,7 +229,7 @@ export default function MemberDetailModal({
             </div>
             <button
               onClick={onClose}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors"
+              className="w-11 h-11 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors"
             >
               <X size={14} />
             </button>

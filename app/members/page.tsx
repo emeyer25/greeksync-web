@@ -255,19 +255,19 @@ export default function MembersPage() {
 
   return (
     <DashboardShell>
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A] mb-3">
               Brotherhood
             </p>
-            <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-white leading-tight tracking-tight">
               Chapter Roster
             </h1>
           </div>
-          <div className="flex items-center gap-3 mt-5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* View toggle */}
             <div className="flex bg-[#161B22] border border-[#21262D] rounded-lg p-0.5">
               <button
@@ -294,13 +294,13 @@ export default function MembersPage() {
                   onClick={() => { setPanel(panel === 'invite' ? 'none' : 'invite'); setCreatedInvite(null) }}
                   className="btn-ghost"
                 >
-                  Invite Member
+                  Invite
                 </button>
                 <button
                   onClick={() => setPanel(panel === 'add' ? 'none' : 'add')}
                   className={panel === 'add' ? 'btn-ghost' : 'btn-primary'}
                 >
-                  {panel === 'add' ? 'Cancel' : '+ Add Member'}
+                  {panel === 'add' ? 'Cancel' : '+ Add'}
                 </button>
               </>
             )}
@@ -308,7 +308,7 @@ export default function MembersPage() {
         </div>
 
         {/* Search + filter */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <input
             type="text"
             placeholder="Search members…"
@@ -319,7 +319,7 @@ export default function MembersPage() {
           <select
             value={filterPos}
             onChange={e => setFilterPos(e.target.value)}
-            className="field w-48"
+            className="field sm:w-48"
           >
             <option value="">All Positions</option>
             {PRESET_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -457,8 +457,9 @@ export default function MembersPage() {
               </div>
             ) : (
               <div className="bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
                 {/* Header */}
-                <div className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-2.5 border-b border-[#21262D]">
+                <div className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-2.5 border-b border-[#21262D] min-w-[480px]">
                   {[
                     { key: 'name',     label: 'Name' },
                     { key: 'position', label: 'Position' },
@@ -485,7 +486,7 @@ export default function MembersPage() {
                   <div
                     key={m.id}
                     onClick={() => openDrawer(m)}
-                    className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#21262D]/40 items-center cursor-pointer transition-colors duration-150"
+                    className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#21262D]/40 items-center cursor-pointer transition-colors duration-150 min-w-[480px]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-[#FF6B4A] text-xs font-semibold flex-shrink-0"
@@ -506,7 +507,7 @@ export default function MembersPage() {
 
                 {/* Pending invites in table */}
                 {canManageMembers && invites.map(inv => (
-                  <div key={inv.id} className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] items-center opacity-50">
+                  <div key={inv.id} className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] items-center opacity-50 min-w-[480px]">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-full border border-dashed border-[#21262D] flex items-center justify-center flex-shrink-0">
                         <Mail size={12} className="text-[#8B949E]" />
@@ -532,6 +533,7 @@ export default function MembersPage() {
                   </div>
                 ))}
               </div>
+            </div>
             )}
           </>
         )}
@@ -542,12 +544,12 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget) closeInviteModal() }}
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
-          <div className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
+          <div className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden max-h-[90vh] flex flex-col"
             style={{ animation: 'modalIn 200ms ease-out' }}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D] flex-shrink-0">
               <h2 className="text-[15px] font-semibold text-white">Invite Member</h2>
               <button onClick={closeInviteModal}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors">
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors">
                 <X size={14} />
               </button>
             </div>

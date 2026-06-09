@@ -421,27 +421,25 @@ export default function RushPage() {
 
   return (
     <DashboardShell>
-      <div className="max-w-[1200px] mx-auto px-6 py-12">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#FF6B4A] mb-3">
               Rush Season
             </p>
-            <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-white leading-tight tracking-tight">
               Rush Management
             </h1>
           </div>
           {canEditRushees && (
-            <div className="mt-5">
-              <button
-                onClick={() => setShowForm(v => !v)}
-                className={showForm ? 'btn-ghost' : 'btn-primary'}
-              >
-                {showForm ? 'Cancel' : '+ Add PNM'}
-              </button>
-            </div>
+            <button
+              onClick={() => setShowForm(v => !v)}
+              className={showForm ? 'btn-ghost' : 'btn-primary'}
+            >
+              {showForm ? 'Cancel' : '+ Add PNM'}
+            </button>
           )}
         </div>
 
@@ -702,8 +700,9 @@ export default function RushPage() {
             )}
 
             <div className="bg-[#161B22] border border-[#21262D] rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
               {/* Table header */}
-              <div className="grid grid-cols-[32px_2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-2.5 border-b border-[#21262D] items-center">
+              <div className="grid grid-cols-[32px_2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-2.5 border-b border-[#21262D] items-center min-w-[560px]">
                 {canEditRushees && (
                   <input
                     type="checkbox"
@@ -742,7 +741,7 @@ export default function RushPage() {
               {tableSorted.map(rushee => (
                 <div
                   key={rushee.id}
-                  className={`grid grid-cols-[32px_2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#1C2128] items-center cursor-pointer transition-colors duration-150 ${
+                  className={`grid grid-cols-[32px_2fr_1fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#1C2128] items-center cursor-pointer transition-colors duration-150 min-w-[560px] ${
                     selectedIds.has(rushee.id) ? 'bg-[rgba(255,107,74,0.04)]' : ''
                   }`}
                   onClick={() => openPanel(rushee)}
@@ -830,6 +829,7 @@ export default function RushPage() {
                   </p>
                 </div>
               ))}
+              </div>
             </div>
           </>
         )}
@@ -844,7 +844,7 @@ export default function RushPage() {
             style={{ backdropFilter: 'blur(8px)' }}
             onClick={closePanel}
           />
-          <div className="fixed right-0 top-0 h-full w-full max-w-sm bg-[#161B22] border-l border-[#21262D] z-50 flex flex-col">
+          <div className="fixed right-0 top-0 h-full w-full sm:max-w-sm bg-[#161B22] border-l border-[#21262D] z-50 flex flex-col">
 
             {/* Panel header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D]">
