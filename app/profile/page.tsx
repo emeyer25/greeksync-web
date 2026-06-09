@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { Camera } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
+import MemberAvatar from '@/components/MemberAvatar'
 
 const PRESET_POSITIONS = [
   'President', 'Vice President', 'Treasurer', 'Secretary',
@@ -30,6 +32,9 @@ export default function ProfilePage() {
   const [savingPos, setSavingPos] = useState(false)
 
   const [savedField, setSavedField] = useState<string | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const startEditName = () => {
     setNameVal(member?.name ?? '')
@@ -72,6 +77,23 @@ export default function ProfilePage() {
     setTimeout(() => setSavedField(null), 2000)
   }
 
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !supabase || !member) return
+    setUploadingPhoto(true)
+    const ext = file.name.split('.').pop()
+    const path = `${member.id}-${Date.now()}.${ext}`
+    const { data, error } = await supabase.storage.from('member-photos').upload(path, file, { upsert: true })
+    if (!error && data) {
+      const { data: { publicUrl } } = supabase.storage.from('member-photos').getPublicUrl(data.path)
+      await supabase.from('members').update({ photo_url: publicUrl }).eq('id', member.id)
+      setPhotoPreview(publicUrl)
+      await refreshMember()
+      flashSaved('photo')
+    }
+    setUploadingPhoto(false)
+  }
+
   const handleSignOut = async () => {
     await signOut()
     router.push('/login')
@@ -108,12 +130,29 @@ export default function ProfilePage() {
 
         {/* Avatar block */}
         <div className="flex flex-col items-center mb-10">
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center text-[#FF6B4A] font-semibold text-xl mb-4"
-            style={{ background: 'rgba(255,107,74,0.15)' }}
-          >
-            {getInitials(displayName)}
+          <div className="relative mb-4">
+            <MemberAvatar name={displayName} photoUrl={photoPreview ?? member.photo_url} size={64} />
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center border-2 border-[#0D1117] transition-colors duration-150 hover:bg-[#30363D]"
+              style={{ background: '#21262D' }}
+              title="Upload photo"
+            >
+              {uploadingPhoto
+                ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                : <Camera size={13} className="text-[#8B949E]" />
+              }
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
           </div>
+          {savedField === 'photo' && <p className="text-[#3FB88C] text-xs mb-2">✓ Photo updated</p>}
           <p className="text-white text-lg font-semibold">{displayName}</p>
           <p className="font-mono text-[#8B949E] text-xs mt-1">{user.email}</p>
           {chapter && <p className="text-[#8B949E]/60 text-xs mt-0.5">{chapter.name}</p>}

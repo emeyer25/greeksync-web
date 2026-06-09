@@ -6,6 +6,7 @@ import { useAuth, type Member } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
 import MemberDetailModal, { PRESET_POSITIONS } from '@/components/MemberDetailModal'
 import { LayoutGrid, List, X, Mail, ChevronUp, ChevronDown } from 'lucide-react'
+import MemberAvatar from '@/components/MemberAvatar'
 
 const POSITION_ORDER = [
   'President', 'Vice President', 'Treasurer', 'Secretary',
@@ -399,11 +400,7 @@ export default function MembersPage() {
                     onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
                     onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
                   >
-                    {/* 64px avatar */}
-                    <div className="w-16 h-16 rounded-full flex items-center justify-center text-[#FF6B4A] font-semibold text-lg mb-4 flex-shrink-0"
-                      style={{ background: 'rgba(255,107,74,0.15)' }}>
-                      {getInitials(m.name)}
-                    </div>
+                    <MemberAvatar name={m.name} photoUrl={m.photo_url} size={64} className="mb-4" />
                     {/* Name (h3) */}
                     <p className="text-white text-[15px] font-semibold leading-tight w-full truncate">{m.name}</p>
                     {/* Position badge */}
@@ -489,10 +486,7 @@ export default function MembersPage() {
                     className="grid grid-cols-[2fr_1fr_2fr_1fr] gap-4 px-4 py-3 border-b border-[#21262D] hover:bg-[#21262D]/40 items-center cursor-pointer transition-colors duration-150 min-w-[480px]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[#FF6B4A] text-xs font-semibold flex-shrink-0"
-                        style={{ background: 'rgba(255,107,74,0.15)' }}>
-                        {getInitials(m.name)}
-                      </div>
+                      <MemberAvatar name={m.name} photoUrl={m.photo_url} size={32} />
                       <p className="text-white text-sm font-medium truncate">{m.name}</p>
                     </div>
                     <div>
@@ -643,6 +637,7 @@ export default function MembersPage() {
           onDelete={canManageMembers ? deleteMember : undefined}
           canEditPositions={canEditPositions}
           canManageMembers={canManageMembers}
+          canUploadPhoto={canManageMembers}
           superAdminUserId={chapter?.super_admin_id}
           currentUserIsSuperAdmin={false}
         />

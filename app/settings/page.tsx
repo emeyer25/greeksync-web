@@ -7,6 +7,7 @@ import DashboardShell from '@/components/layout/DashboardShell'
 import { Settings, X, Crown, Lock, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import MemberDetailModal, { ROLE_DEFAULT_PERMISSIONS } from '@/components/MemberDetailModal'
+import MemberAvatar from '@/components/MemberAvatar'
 
 type Tab = 'profile' | 'members' | 'billing' | 'danger'
 
@@ -227,7 +228,7 @@ export default function SettingsPage() {
 
         {/* Mobile horizontal tabs */}
         <div className="flex sm:hidden overflow-x-auto gap-1 pb-1 mb-6 -mx-4 px-4 scrollbar-hide">
-          {TABS.map(t => (
+          {TABS.filter(t => t.key !== 'danger' || isSuperAdmin).map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
@@ -250,7 +251,7 @@ export default function SettingsPage() {
           {/* Vertical tab list — desktop only */}
           <nav className="hidden sm:block flex-shrink-0 w-44">
             <ul className="space-y-0.5">
-              {TABS.map(t => (
+              {TABS.filter(t => t.key !== 'danger' || isSuperAdmin).map(t => (
                 <li key={t.key}>
                   <button
                     onClick={() => setTab(t.key)}
@@ -362,12 +363,7 @@ export default function SettingsPage() {
                           onClick={() => setSelectedMember(m)}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-[#FF6B4A] text-xs font-semibold flex-shrink-0"
-                              style={{ background: 'rgba(255,107,74,0.15)' }}
-                            >
-                              {getInitials(m.name)}
-                            </div>
+                            <MemberAvatar name={m.name} photoUrl={m.photo_url} size={32} />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="text-white text-sm font-medium truncate">{m.name}</p>
@@ -458,7 +454,7 @@ export default function SettingsPage() {
             )}
 
             {/* ── Danger Zone ──────────────────────────────────────────────── */}
-            {tab === 'danger' && (
+            {tab === 'danger' && isSuperAdmin && (
               <div className="space-y-4">
                 <div className="border border-[#E5484D]/30 rounded-xl overflow-hidden">
                   <div className="px-6 py-4 border-b border-[#E5484D]/20 bg-[#E5484D]/5">
@@ -579,6 +575,7 @@ export default function SettingsPage() {
           }}
           canEditPositions={true}
           canManageMembers={true}
+          canUploadPhoto={true}
           showRoleEditor={true}
           superAdminUserId={chapter?.super_admin_id}
           currentUserIsSuperAdmin={isSuperAdmin}

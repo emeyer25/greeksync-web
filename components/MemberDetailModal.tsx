@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Crown, Lock } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { X, Crown, Lock, Camera } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Member } from '@/lib/auth-context'
+import MemberAvatar from './MemberAvatar'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ interface Props {
   onDelete?: (id: string) => void
   canEditPositions: boolean
   canManageMembers: boolean
+  canUploadPhoto?: boolean
   showRoleEditor?: boolean
   superAdminUserId?: string | null
   currentUserIsSuperAdmin?: boolean
@@ -122,6 +124,7 @@ export default function MemberDetailModal({
   onDelete,
   canEditPositions,
   canManageMembers,
+  canUploadPhoto = false,
   showRoleEditor = false,
   superAdminUserId,
   currentUserIsSuperAdmin = false,
@@ -140,6 +143,10 @@ export default function MemberDetailModal({
   const [localRole, setLocalRole]         = useState<Member['role']>(member.role)
   const [localPerms, setLocalPerms]       = useState<string[]>(member.permissions ?? [])
   const [savingRole, setSavingRole]       = useState(false)
+
+  const [photoPreview, setPhotoPreview]   = useState<string | null>(member.photo_url ?? null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const [toast, setToast] = useState<{ message: string; sub?: string } | null>(null)
 
@@ -198,6 +205,27 @@ export default function MemberDetailModal({
     showToast('✓ Privileges saved')
   }
 
+  // ── Photo upload ───────────────────────────────────────────────────────────
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !supabase) return
+    setUploadingPhoto(true)
+    const ext = file.name.split('.').pop()
+    const path = `${member.id}-${Date.now()}.${ext}`
+    const { data, error } = await supabase.storage.from('member-photos').upload(path, file, { upsert: true })
+    if (!error && data) {
+      const { data: { publicUrl } } = supabase.storage.from('member-photos').getPublicUrl(data.path)
+      await supabase.from('members').update({ photo_url: publicUrl }).eq('id', member.id)
+      setPhotoPreview(publicUrl)
+      onUpdate({ ...member, photo_url: publicUrl, role: localRole, permissions: localPerms })
+      showToast('✓ Photo updated')
+    } else {
+      showToast('Upload failed')
+    }
+    setUploadingPhoto(false)
+  }
+
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = () => {
@@ -239,11 +267,31 @@ export default function MemberDetailModal({
           <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
             {/* Avatar + name */}
             <div className="flex flex-col items-center text-center">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-[#FF6B4A] font-semibold text-xl mb-4"
-                style={{ background: 'rgba(255,107,74,0.15)' }}
-              >
-                {getInitials(member.name)}
+              <div className="relative mb-4 group">
+                <MemberAvatar name={member.name} photoUrl={photoPreview} size={64} />
+                {canUploadPhoto && (
+                  <>
+                    <button
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                      className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center border-2 border-[#161B22] transition-colors duration-150"
+                      style={{ background: '#21262D' }}
+                      title="Upload photo"
+                    >
+                      {uploadingPhoto
+                        ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        : <Camera size={13} className="text-[#8B949E]" />
+                      }
+                    </button>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handlePhotoChange}
+                    />
+                  </>
+                )}
               </div>
               <p className="text-white text-lg font-semibold">{member.name}</p>
               {member.email && (

@@ -23,6 +23,7 @@ export interface Member {
   chapter_id: string | null
   user_id: string | null
   permissions: string[]
+  photo_url: string | null
 }
 
 // Permission keys
