@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
 import { Users, X, ChevronUp, ChevronDown } from 'lucide-react'
+import ImportRusheesModal from '@/components/rush/ImportRusheesModal'
 
 type Status = 'Rushing' | 'Bid Extended' | 'Bids Accepted' | 'Dropped'
 
@@ -111,6 +112,8 @@ export default function RushPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<Status | ''>('')
   const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null)
+  const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; pendingSubmit: boolean } | null>(null)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     fetchRushees()
@@ -235,10 +238,10 @@ export default function RushPage() {
     }
   }
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
+  async function submitAdd() {
     if (!supabase || !form.name.trim()) return
     setSaving(true)
+    setDuplicateWarning(null)
     let photo_url: string | null = null
     if (photoFileRef.current) photo_url = await uploadPhoto(photoFileRef.current)
     else if (photoUrlRef.current) photo_url = photoUrlRef.current
@@ -260,6 +263,18 @@ export default function RushPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
     setShowForm(false)
     setSaving(false)
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !form.name.trim()) return
+    const trimmedName = form.name.trim()
+    const duplicate = rushees.find(r => r.name.trim().toLowerCase() === trimmedName.toLowerCase())
+    if (duplicate) {
+      setDuplicateWarning({ name: trimmedName, pendingSubmit: true })
+      return
+    }
+    submitAdd()
   }
 
   async function handleBulkStatus() {
@@ -434,12 +449,20 @@ export default function RushPage() {
             </h1>
           </div>
           {canEditRushees && (
-            <button
-              onClick={() => setShowForm(v => !v)}
-              className={showForm ? 'btn-ghost' : 'btn-primary'}
-            >
-              {showForm ? 'Cancel' : '+ Add PNM'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowImport(true)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#484F58] transition-colors duration-150"
+              >
+                Import Rushees
+              </button>
+              <button
+                onClick={() => setShowForm(v => !v)}
+                className={showForm ? 'btn-ghost' : 'btn-primary'}
+              >
+                {showForm ? 'Cancel' : '+ Add PNM'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -1059,6 +1082,45 @@ export default function RushPage() {
             ) : null}
           </div>
         </>
+      )}
+      {/* Import rushees modal */}
+      {showImport && (
+        <ImportRusheesModal
+          chapterId={chapterId}
+          existingRushees={rushees}
+          onClose={() => setShowImport(false)}
+          onImported={(newRushees) => {
+            setRushees(prev => [...newRushees, ...prev])
+            setShowImport(false)
+          }}
+        />
+      )}
+
+      {/* Duplicate name warning modal */}
+      {duplicateWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#161B22] border border-[#21262D] rounded-xl p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-[17px] font-semibold text-white mb-3">Duplicate Name Detected</h2>
+            <p className="text-[#8B949E] text-sm mb-6">
+              A rushee named <span className="text-white font-medium">{duplicateWarning.name}</span> already exists on your rush list. Are you sure you want to add another?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDuplicateWarning(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#8B949E] hover:text-white border border-[#30363D] hover:border-[#484F58] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAdd}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-[#FF6B4A] text-white hover:bg-[#FF6B4A]/90 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Adding…' : 'Add Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardShell>
   )
