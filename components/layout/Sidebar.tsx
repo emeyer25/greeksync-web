@@ -157,7 +157,14 @@ export default function Sidebar() {
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-[#FF6B4A] rounded-b-full" />
               )}
               <Icon size={20} strokeWidth={1.5} />
-              <span>{label}</span>
+              {label === 'Chapter Settings' ? (
+                <>
+                  <span className="md:hidden">Settings</span>
+                  <span className="hidden md:inline">Chapter Settings</span>
+                </>
+              ) : (
+                <span>{label}</span>
+              )}
             </Link>
           )
         })}
