@@ -9,6 +9,9 @@ export interface Chapter {
   name: string
   slug: string
   super_admin_id: string | null
+  greek_letters: string | null
+  school: string | null
+  description: string | null
 }
 
 export interface Member {
@@ -98,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.chapter_id) {
       const { data: chapterData } = await supabase
         .from('chapters')
-        .select('id, name, slug, super_admin_id')
+        .select('id, name, slug, super_admin_id, greek_letters, school, description')
         .eq('id', data.chapter_id)
         .maybeSingle()
       setChapter(chapterData as Chapter | null)

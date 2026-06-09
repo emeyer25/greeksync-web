@@ -56,6 +56,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (chapter) {
       setChapterName(chapter.name ?? '')
+      setGreekLetters(chapter.greek_letters ?? '')
+      setSchool(chapter.school ?? '')
+      setDescription(chapter.description ?? '')
       setDirty(false)
     }
   }, [chapter])
@@ -68,7 +71,14 @@ export default function SettingsPage() {
     if (!supabase || !chapterId || !chapterName.trim()) return
     setSaving(true)
     setSaveError(null)
-    const { error } = await supabase.from('chapters').update({ name: chapterName.trim() }).eq('id', chapterId)
+    console.log('saveProfile: updating chapter', chapterId, { name: chapterName.trim(), greek_letters: greekLetters.trim(), school: school.trim(), description: description.trim() })
+    const { error } = await supabase.from('chapters').update({
+      name: chapterName.trim(),
+      greek_letters: greekLetters.trim() || null,
+      school: school.trim() || null,
+      description: description.trim() || null,
+    }).eq('id', chapterId)
+    console.log('saveProfile: update result', error ?? 'ok')
     if (error) {
       console.error('Chapter update failed:', error)
       setSaveError(error.message)
@@ -484,7 +494,13 @@ export default function SettingsPage() {
             }
             <div className="flex items-center gap-2">
               <button
-                onClick={() => { setChapterName(chapter?.name ?? ''); setDirty(false) }}
+                onClick={() => {
+                  setChapterName(chapter?.name ?? '')
+                  setGreekLetters(chapter?.greek_letters ?? '')
+                  setSchool(chapter?.school ?? '')
+                  setDescription(chapter?.description ?? '')
+                  setDirty(false)
+                }}
                 className="btn-ghost"
               >
                 Discard
