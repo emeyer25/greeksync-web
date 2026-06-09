@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.chapter_id) {
       const { data: chapterData } = await supabase
         .from('chapters')
-        .select('id, name, slug, super_admin_id, greek_letters, school, description')
+        .select('*')
         .eq('id', data.chapter_id)
         .maybeSingle()
       setChapter(chapterData as Chapter | null)
