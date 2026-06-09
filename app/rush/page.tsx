@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
-import { Users, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { Users, X, ChevronUp, ChevronDown, LayoutGrid, List } from 'lucide-react'
 import ImportRusheesModal from '@/components/rush/ImportRusheesModal'
 
 type Status = 'Rushing' | 'Bid Extended' | 'Bids Accepted' | 'Dropped'
@@ -114,6 +114,12 @@ export default function RushPage() {
   const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null)
   const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; pendingSubmit: boolean } | null>(null)
   const [showImport, setShowImport] = useState(false)
+  const [view, setView] = useState<'table' | 'grid'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('rush-view') as 'table' | 'grid') ?? 'table'
+    }
+    return 'table'
+  })
 
   useEffect(() => {
     fetchRushees()
@@ -448,22 +454,43 @@ export default function RushPage() {
               Rush Management
             </h1>
           </div>
-          {canEditRushees && (
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* View toggle — hidden on mobile */}
+            <div className="hidden sm:flex bg-[#161B22] border border-[#21262D] rounded-lg p-0.5">
               <button
-                onClick={() => setShowImport(true)}
-                className="px-4 py-2 rounded-lg text-sm font-medium border border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#484F58] transition-colors duration-150"
+                onClick={() => { setView('grid'); localStorage.setItem('rush-view', 'grid') }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 ${
+                  view === 'grid' ? 'bg-[#21262D] text-white' : 'text-[#8B949E] hover:text-white'
+                }`}
               >
-                Import Rushees
+                <LayoutGrid size={13} /> Grid
               </button>
               <button
-                onClick={() => setShowForm(v => !v)}
-                className={showForm ? 'btn-ghost' : 'btn-primary'}
+                onClick={() => { setView('table'); localStorage.setItem('rush-view', 'table') }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 ${
+                  view === 'table' ? 'bg-[#21262D] text-white' : 'text-[#8B949E] hover:text-white'
+                }`}
               >
-                {showForm ? 'Cancel' : '+ Add PNM'}
+                <List size={13} /> Table
               </button>
             </div>
-          )}
+            {canEditRushees && (
+              <>
+                <button
+                  onClick={() => setShowImport(true)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#484F58] transition-colors duration-150"
+                >
+                  Import Rushees
+                </button>
+                <button
+                  onClick={() => setShowForm(v => !v)}
+                  className={showForm ? 'btn-ghost' : 'btn-primary'}
+                >
+                  {showForm ? 'Cancel' : '+ Add PNM'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -661,7 +688,7 @@ export default function RushPage() {
             ))}
           </div>
 
-        ) : tableSorted.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center">
             <Users size={48} strokeWidth={1} className="text-[#8B949E] mb-5" />
             {rushees.length === 0 ? (
@@ -678,7 +705,33 @@ export default function RushPage() {
               <p className="text-[#8B949E] text-sm">No results for that search.</p>
             )}
           </div>
+
+        ) : view === 'grid' ? (
+          /* ── Grid view ──────────────────────────────────────────────────── */
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {filtered.map(rushee => (
+              <button
+                key={rushee.id}
+                onClick={() => openPanel(rushee)}
+                className="bg-[#161B22] border border-[#21262D] rounded-xl p-4 flex flex-col items-center text-center hover:border-[#30363D] transition-all duration-200"
+                style={{ transform: 'translateY(0)' }}
+                onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
+                onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
+                <Avatar rushee={rushee} size="lg" />
+                <p className="text-white text-[15px] font-semibold leading-tight mt-3 w-full truncate">{rushee.name}</p>
+                {rushee.hometown && (
+                  <p className="text-[#8B949E] text-xs mt-0.5 w-full truncate">{rushee.hometown}</p>
+                )}
+                <div className="mt-2">
+                  <StatusBadge status={rushee.status} />
+                </div>
+              </button>
+            ))}
+          </div>
+
         ) : (
+          /* ── Table view ─────────────────────────────────────────────────── */
           <>
             {/* Bulk action bar */}
             {selectedIds.size > 0 && (
