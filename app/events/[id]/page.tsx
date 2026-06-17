@@ -156,7 +156,13 @@ export default function EventPage() {
     if (!supabase || !event) return
     if (!confirm(`Delete "${event.theme}"? This cannot be undone.`)) return
     setDeleting(true)
-    await supabase.from('events').delete().eq('id', id)
+    const { error } = await supabase.from('events').delete().eq('id', id)
+    if (error) {
+      console.error('Failed to delete event:', error.message)
+      alert(`Delete failed: ${error.message}`)
+      setDeleting(false)
+      return
+    }
     router.replace('/calendar')
   }
 

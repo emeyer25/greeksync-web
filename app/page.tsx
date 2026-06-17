@@ -111,16 +111,16 @@ export default function HomePage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative min-h-[calc(100vh-56px)] flex items-center overflow-hidden">
+      <section className="relative h-screen flex items-center overflow-hidden">
         {/* 4×3 photo collage background */}
-        <div className="absolute inset-0 grid grid-cols-4 grid-rows-3">
+        <div className="absolute inset-0 grid grid-cols-2 grid-rows-4 sm:grid-cols-4 sm:grid-rows-3 h-full">
           {COLLAGE_CELLS.map((src, i) => (
-            <div key={i} className="overflow-hidden">
+            <div key={i} className={`overflow-hidden w-full h-full${i >= 8 ? ' hidden sm:block' : ''}`}>
               <img
                 src={src}
                 alt=""
-                className="w-full h-full"
-                style={{ objectFit: 'cover', filter: 'brightness(0.65) saturate(1.1)' }}
+                className="w-full h-full object-cover"
+                style={{ filter: 'brightness(0.65) saturate(1.1)' }}
               />
             </div>
           ))}
