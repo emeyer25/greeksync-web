@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { getInitials } from '@/lib/utils'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import DashboardShell from '@/components/layout/DashboardShell'
 import { Users, X, ChevronUp, ChevronDown, LayoutGrid, List } from 'lucide-react'
 import ImportRusheesModal from '@/components/rush/ImportRusheesModal'
+import RusheeDetailPanel from '@/components/rush/RusheeDetailPanel'
 
 type Status = 'Rushing' | 'Bid Extended' | 'Bids Accepted' | 'Dropped'
 
@@ -38,9 +40,6 @@ const STATUS_BADGE: Record<Status, { bg: string; color: string; label: string }>
 
 const STATUSES: Status[] = ['Rushing', 'Bid Extended', 'Bids Accepted', 'Dropped']
 
-function getInitials(name: string) {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-}
 
 function Avatar({ rushee, size = 'md' }: { rushee: Rushee; size?: 'sm' | 'md' | 'lg' }) {
   const sizeClass = size === 'sm' ? 'w-8 h-8 text-xs' : size === 'lg' ? 'w-16 h-16 text-lg' : 'w-10 h-10 text-sm'
@@ -79,7 +78,7 @@ export default function RushPage() {
   const [saving, setSaving] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const photoFileRef = useRef<File | null>(null)
-  const photoUrlRef = useRef<string | null>(null) // URL from Instagram import
+  const photoUrlRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [rushEvents, setRushEvents] = useState<RushEvent[]>([])
@@ -89,21 +88,10 @@ export default function RushPage() {
   const [toggling, setToggling] = useState<string | null>(null)
 
   const [form, setForm] = useState({
-    name: '', hometown: '', notes: '', status: 'Rushing' as Status, phone: '', instagram: '',
+    name: '', hometown: '', notes: '', status: 'Rushing' as Status, phone: '',
   })
-  const [igImporting, setIgImporting] = useState(false)
-  const [igImportError, setIgImportError] = useState<string | null>(null)
 
   const [selectedRushee, setSelectedRushee] = useState<Rushee | null>(null)
-  const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', hometown: '', notes: '', phone: '', instagram: '', status: 'Rushing' as Status })
-  const [editIgImporting, setEditIgImporting] = useState(false)
-  const [editIgImportError, setEditIgImportError] = useState<string | null>(null)
-  const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null)
-  const editPhotoFileRef = useRef<File | null>(null)
-  const editPhotoUrlRef = useRef<string | null>(null) // URL from Instagram import
-  const editFileInputRef = useRef<HTMLInputElement>(null)
-  const [savingEdit, setSavingEdit] = useState(false)
 
   const [sortField, setSortField] = useState<'name' | 'status' | 'created_at'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -222,28 +210,6 @@ export default function RushPage() {
     }
   }
 
-  async function importInstagram(
-    handle: string,
-    setError: (e: string | null) => void,
-    setImporting: (v: boolean) => void,
-    onSuccess: (data: { name?: string | null; photoUrl?: string | null }) => void,
-  ) {
-    const username = handle.replace('@', '').trim()
-    if (!username) return
-    setImporting(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/instagram?username=${encodeURIComponent(username)}`)
-      const json = await res.json()
-      if (!res.ok) { setError(json.error ?? 'Could not load profile'); return }
-      onSuccess(json)
-    } catch {
-      setError('Network error')
-    } finally {
-      setImporting(false)
-    }
-  }
-
   async function submitAdd() {
     if (!supabase || !form.name.trim()) return
     setSaving(true)
@@ -256,13 +222,12 @@ export default function RushPage() {
       hometown: form.hometown.trim() || null,
       notes: form.notes.trim() || null,
       phone: form.phone.trim() || null,
-      instagram: form.instagram.trim() || null,
       status: form.status,
       photo_url,
       ...(chapterId ? { chapter_id: chapterId } : {}),
     }).select().single()
     if (data) setRushees(prev => [data as Rushee, ...prev])
-    setForm({ name: '', hometown: '', notes: '', status: 'Rushing', phone: '', instagram: '' })
+    setForm({ name: '', hometown: '', notes: '', status: 'Rushing', phone: '' })
     setPhotoPreview(null)
     photoFileRef.current = null
     photoUrlRef.current = null
@@ -336,47 +301,17 @@ export default function RushPage() {
 
   function openPanel(r: Rushee) {
     setSelectedRushee(r)
-    setEditMode(false)
-    setEditForm({ name: r.name, hometown: r.hometown ?? '', notes: r.notes ?? '', phone: r.phone ?? '', instagram: r.instagram ?? '', status: r.status })
-    setEditPhotoPreview(r.photo_url)
-    editPhotoFileRef.current = null
   }
 
   function closePanel() {
     setSelectedRushee(null)
-    setEditMode(false)
-    setEditPhotoPreview(null)
-    editPhotoFileRef.current = null
-    editPhotoUrlRef.current = null
   }
 
-  function handleEditPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    editPhotoFileRef.current = file
-    setEditPhotoPreview(URL.createObjectURL(file))
-  }
-
-  async function saveEdit() {
-    if (!supabase || !selectedRushee) return
-    setSavingEdit(true)
-    let photo_url = selectedRushee.photo_url
-    if (editPhotoFileRef.current) photo_url = await uploadPhoto(editPhotoFileRef.current)
-    else if (editPhotoUrlRef.current) photo_url = editPhotoUrlRef.current
-    const updates = {
-      name: editForm.name.trim() || selectedRushee.name,
-      hometown: editForm.hometown.trim() || null,
-      notes: editForm.notes.trim() || null,
-      phone: editForm.phone.trim() || null,
-      instagram: editForm.instagram.trim() || null,
-      status: editForm.status,
-      photo_url,
-    }
-    await supabase.from('rushees').update(updates).eq('id', selectedRushee.id)
-    setRushees(prev => prev.map(r => r.id === selectedRushee.id ? { ...r, ...updates } : r))
+  async function saveEdit(rusheeId: string, updates: Partial<Rushee> & { photo_url: string | null }) {
+    if (!supabase) return
+    await supabase.from('rushees').update(updates).eq('id', rusheeId)
+    setRushees(prev => prev.map(r => r.id === rusheeId ? { ...r, ...updates } : r))
     setSelectedRushee(prev => prev ? { ...prev, ...updates } : null)
-    setEditMode(false)
-    setSavingEdit(false)
   }
 
   function toggleSort(field: typeof sortField) {
@@ -384,24 +319,26 @@ export default function RushPage() {
     else { setSortField(field); setSortDir('asc') }
   }
 
-  const filtered = rushees
-    .filter(r => showDropped || r.status !== 'Dropped')
-    .filter(r =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      (r.hometown ?? '').toLowerCase().includes(search.toLowerCase())
-    )
-    .filter(r => {
-      if (!selectedEvent) return true
-      if (contactFilter === 'contacted') return contactedIds.has(r.id)
-      if (contactFilter === 'not') return !contactedIds.has(r.id)
-      return true
-    })
+  const tableSorted = useMemo(() => {
+    const filtered = rushees
+      .filter(r => showDropped || r.status !== 'Dropped')
+      .filter(r =>
+        r.name.toLowerCase().includes(search.toLowerCase()) ||
+        (r.hometown ?? '').toLowerCase().includes(search.toLowerCase())
+      )
+      .filter(r => {
+        if (!selectedEvent) return true
+        if (contactFilter === 'contacted') return contactedIds.has(r.id)
+        if (contactFilter === 'not') return !contactedIds.has(r.id)
+        return true
+      })
 
-  const tableSorted = [...filtered].sort((a, b) => {
-    const aVal = (a[sortField] ?? '') as string
-    const bVal = (b[sortField] ?? '') as string
-    return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
-  })
+    return [...filtered].sort((a, b) => {
+      const aVal = (a[sortField] ?? '') as string
+      const bVal = (b[sortField] ?? '') as string
+      return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+    })
+  }, [rushees, showDropped, search, selectedEvent, contactFilter, contactedIds, sortField, sortDir])
 
   const counts = {
     total: rushees.length,
@@ -607,38 +544,6 @@ export default function RushPage() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="label block mb-2">Instagram</label>
-                  <div className="flex gap-2">
-                    <input
-                      value={form.instagram}
-                      onChange={e => { setForm(p => ({ ...p, instagram: e.target.value })); setIgImportError(null) }}
-                      placeholder="@handle"
-                      className="field flex-1"
-                    />
-                    <button
-                      type="button"
-                      disabled={igImporting || !form.instagram.trim()}
-                      onClick={() => importInstagram(
-                        form.instagram,
-                        setIgImportError,
-                        setIgImporting,
-                        ({ name, photoUrl }) => {
-                          if (name && !form.name.trim()) setForm(p => ({ ...p, name }))
-                          if (photoUrl && !photoPreview) {
-                            setPhotoPreview(photoUrl)
-                            photoUrlRef.current = photoUrl
-                          }
-                        },
-                      )}
-                      className="px-3 py-2 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 whitespace-nowrap"
-                    >
-                      {igImporting ? 'Loading…' : 'Import'}
-                    </button>
-                  </div>
-                  {igImportError && <p className="text-xs text-red-400 mt-1">{igImportError}</p>}
-                  <p className="text-[#8B949E]/60 text-xs mt-1">Import fills in name and profile photo from a public account.</p>
-                </div>
-                <div className="md:col-span-2">
                   <label className="label block mb-2">Notes</label>
                   <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                     placeholder="Mutual connections, interests, impressions…"
@@ -688,7 +593,7 @@ export default function RushPage() {
             ))}
           </div>
 
-        ) : filtered.length === 0 ? (
+        ) : tableSorted.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center">
             <Users size={48} strokeWidth={1} className="text-[#8B949E] mb-5" />
             {rushees.length === 0 ? (
@@ -709,7 +614,7 @@ export default function RushPage() {
         ) : view === 'grid' ? (
           /* ── Grid view ──────────────────────────────────────────────────── */
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filtered.map(rushee => (
+            {tableSorted.map(rushee => (
               <button
                 key={rushee.id}
                 onClick={() => openPanel(rushee)}
@@ -914,227 +819,17 @@ export default function RushPage() {
 
       {/* Detail / edit panel */}
       {selectedRushee && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/60 z-40"
-            style={{ backdropFilter: 'blur(8px)' }}
-            onClick={closePanel}
-          />
-          <div className="fixed right-0 top-0 h-full w-full sm:max-w-sm bg-[#161B22] border-l border-[#21262D] z-50 flex flex-col">
-
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262D]">
-              <p className="label">PNM Detail</p>
-              <div className="flex items-center gap-2">
-                {canEditRushees && (
-                  <button
-                    onClick={() => setEditMode(v => !v)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 ${
-                      editMode
-                        ? 'bg-[#21262D] text-white'
-                        : 'text-[#8B949E] hover:text-white hover:bg-[#21262D]'
-                    }`}
-                  >
-                    {editMode ? 'Cancel' : 'Edit'}
-                  </button>
-                )}
-                <button
-                  onClick={closePanel}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors duration-150"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Panel body */}
-            <div className="flex-1 overflow-y-auto px-6 py-6">
-              {editMode ? (
-                /* Edit form */
-                <div className="space-y-5">
-                  {/* Photo */}
-                  <div className="flex flex-col items-center">
-                    <div
-                      className="relative w-20 h-20 rounded-full overflow-hidden border border-[#21262D] flex items-center justify-center cursor-pointer group/photo"
-                      onClick={() => editFileInputRef.current?.click()}
-                    >
-                      {editPhotoPreview
-                        ? <img src={editPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center bg-[rgba(255,107,74,0.15)] text-[#FF6B4A] font-semibold text-xl">
-                            {getInitials(selectedRushee.name)}
-                          </div>
-                      }
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/photo:opacity-100 flex items-center justify-center transition-opacity duration-200 rounded-full">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
-                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                          <circle cx="12" cy="13" r="4"/>
-                        </svg>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => editFileInputRef.current?.click()}
-                      className="mt-2 text-xs text-[#8B949E] hover:text-white transition-colors duration-150"
-                    >
-                      Change photo
-                    </button>
-                    <input ref={editFileInputRef} type="file" accept="image/*" onChange={handleEditPhotoChange} className="hidden" />
-                  </div>
-
-                  <div>
-                    <label className="label block mb-2">Name</label>
-                    <input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} className="field" />
-                  </div>
-                  <div>
-                    <label className="label block mb-2">Phone</label>
-                    <input type="tel" value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))}
-                      placeholder="(555) 000-0000" className="field" />
-                  </div>
-                  <div>
-                    <label className="label block mb-2">Instagram</label>
-                    <div className="flex gap-2">
-                      <input
-                        value={editForm.instagram}
-                        onChange={e => { setEditForm(p => ({ ...p, instagram: e.target.value })); setEditIgImportError(null) }}
-                        placeholder="@handle"
-                        className="field flex-1"
-                      />
-                      <button
-                        type="button"
-                        disabled={editIgImporting || !editForm.instagram.trim()}
-                        onClick={() => importInstagram(
-                          editForm.instagram,
-                          setEditIgImportError,
-                          setEditIgImporting,
-                          ({ name, photoUrl }) => {
-                            if (name && !editForm.name.trim()) setEditForm(p => ({ ...p, name }))
-                            if (photoUrl && !editPhotoPreview) {
-                            setEditPhotoPreview(photoUrl)
-                            editPhotoUrlRef.current = photoUrl
-                          }
-                          },
-                        )}
-                        className="px-3 py-2 rounded-lg text-xs font-medium bg-[rgba(255,107,74,0.12)] text-[#FF6B4A] border border-[rgba(255,107,74,0.2)] hover:bg-[rgba(255,107,74,0.2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 whitespace-nowrap"
-                      >
-                        {editIgImporting ? 'Loading…' : 'Import'}
-                      </button>
-                    </div>
-                    {editIgImportError && <p className="text-xs text-red-400 mt-1">{editIgImportError}</p>}
-                  </div>
-                  <div>
-                    <label className="label block mb-2">Hometown</label>
-                    <input value={editForm.hometown} onChange={e => setEditForm(p => ({ ...p, hometown: e.target.value }))}
-                      placeholder="City, State" className="field" />
-                  </div>
-                  <div>
-                    <label className="label block mb-2">Status</label>
-                    <select value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: e.target.value as Status }))}
-                      className="field">
-                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label block mb-2">Notes</label>
-                    <textarea value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
-                      placeholder="Mutual connections, interests, impressions…"
-                      rows={4} className="field resize-none pt-2.5" style={{ height: 'auto' }} />
-                  </div>
-                </div>
-              ) : (
-                /* Read-only view */
-                <div className="space-y-6">
-                  {/* Avatar + name */}
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-20 h-20 rounded-full overflow-hidden mb-3">
-                      {selectedRushee.photo_url
-                        ? <img src={selectedRushee.photo_url} alt={selectedRushee.name} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center bg-[rgba(255,107,74,0.15)] text-[#FF6B4A] font-semibold text-xl">
-                            {getInitials(selectedRushee.name)}
-                          </div>
-                      }
-                    </div>
-                    <h2 className="text-xl font-bold text-white">{selectedRushee.name}</h2>
-                    {selectedRushee.hometown && (
-                      <p className="text-[#8B949E] text-sm mt-0.5">{selectedRushee.hometown}</p>
-                    )}
-                    <div className="mt-3">
-                      <StatusBadge status={selectedRushee.status} />
-                    </div>
-                  </div>
-
-                  <div className="border-t border-[#21262D]" />
-
-                  {/* Details */}
-                  <div className="space-y-4">
-                    {selectedRushee.phone && (
-                      <div>
-                        <p className="label mb-1">Phone</p>
-                        <p className="font-mono text-white text-sm">{selectedRushee.phone}</p>
-                      </div>
-                    )}
-                    {selectedRushee.instagram && (
-                      <div>
-                        <p className="label mb-1">Instagram</p>
-                        <a
-                          href={`https://instagram.com/${selectedRushee.instagram.replace('@', '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#FF6B4A] text-sm hover:underline"
-                        >
-                          @{selectedRushee.instagram.replace('@', '')}
-                        </a>
-                      </div>
-                    )}
-                    <div>
-                      <p className="label mb-1">Added</p>
-                      <p className="font-mono text-[#8B949E] text-sm">
-                        {new Date(selectedRushee.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                      </p>
-                    </div>
-                    {selectedRushee.notes && (
-                      <div>
-                        <p className="label mb-1">Notes</p>
-                        <p className="text-[#8B949E] text-sm leading-relaxed whitespace-pre-wrap">{selectedRushee.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Panel footer */}
-            {editMode ? (
-              <div className="px-6 py-4 border-t border-[#21262D] space-y-2">
-                <button onClick={saveEdit} disabled={savingEdit || !editForm.name.trim()} className="btn-primary w-full">
-                  {savingEdit ? 'Saving…' : 'Save Changes'}
-                </button>
-                <button
-                  onClick={() => handleDelete(selectedRushee.id, selectedRushee.name)}
-                  className="btn-danger w-full"
-                >
-                  Remove from Rush List
-                </button>
-              </div>
-            ) : (canEditRushees || (canManageMembers && selectedRushee.status === 'Bids Accepted')) ? (
-              <div className="px-6 py-4 border-t border-[#21262D] space-y-2">
-                {canEditRushees && (
-                  <button onClick={() => setEditMode(true)} className="btn-primary w-full">
-                    Edit PNM
-                  </button>
-                )}
-                {canManageMembers && selectedRushee.status === 'Bids Accepted' && (
-                  <button
-                    onClick={() => addToRoster(selectedRushee)}
-                    disabled={addingToRoster}
-                    className="w-full px-4 py-2 rounded-lg text-sm font-medium border border-[#3FB88C] text-[#3FB88C] hover:bg-[#3FB88C]/10 transition-colors disabled:opacity-50"
-                  >
-                    {addingToRoster ? 'Adding…' : 'Add to Roster'}
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </>
+        <RusheeDetailPanel
+          rushee={selectedRushee}
+          canEditRushees={canEditRushees}
+          canManageMembers={canManageMembers}
+          addingToRoster={addingToRoster}
+          onClose={closePanel}
+          onSave={updates => saveEdit(selectedRushee.id, updates)}
+          onDelete={handleDelete}
+          onAddToRoster={addToRoster}
+          uploadPhoto={uploadPhoto}
+        />
       )}
       {/* Import rushees modal */}
       {showImport && (
