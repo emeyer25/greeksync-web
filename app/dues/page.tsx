@@ -3,11 +3,14 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth, type Member } from '@/lib/auth-context'
+import { getInitials } from '@/lib/utils'
 import DashboardShell from '@/components/layout/DashboardShell'
 import {
   Search, Plus, X, ChevronDown, Bell, DollarSign,
-  Pencil, Archive, Trash2, Download, Check, ArchiveRestore,
+  Pencil, Archive, Trash2, Download, ArchiveRestore, Check,
 } from 'lucide-react'
+import MemberDuesPanel from '@/components/dues/MemberDuesPanel'
+import { NewPeriodModal, EditPeriodModal, DeletePeriodModal, SendRemindersModal } from '@/components/dues/PeriodModals'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,10 +38,10 @@ interface DuesPayment {
 
 type PaymentStatus = 'paid' | 'partial' | 'overdue' | 'unpaid'
 type FilterTab = 'all' | 'unpaid' | 'partial' | 'overdue' | 'paid'
-type PanelTab = 'period' | 'history'
 
 interface MemberDuesRow {
-  memberId: string
+  memberId: string     // members.id (DB primary key) — used for payment FK
+  memberAuthId: string // members.user_id (auth UUID) — used for visibility filter
   memberName: string
   amountDue: number  // effective due (includes late fee if past due)
   amountPaid: number
@@ -67,9 +70,6 @@ function formatDollars(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
-function getInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-}
 
 function computeStatus(amountPaid: number, amountDue: number, dueDate: string): PaymentStatus {
   if (amountPaid >= amountDue) return 'paid'
@@ -175,7 +175,6 @@ export default function DuesPage() {
   const [search, setSearch] = useState('')
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [panelMemberId, setPanelMemberId] = useState<string | null>(null)
-  const [panelTab, setPanelTab] = useState<PanelTab>('period')
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false)
   const [showNewPeriod, setShowNewPeriod] = useState(false)
   const [showReminders, setShowReminders] = useState(false)
@@ -202,11 +201,6 @@ export default function DuesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingPeriod, setDeletingPeriod] = useState(false)
 
-  // ── Log-payment form ────────────────────────────────────────────────────────
-  const [logAmount, setLogAmount] = useState('')
-  const [logNotes, setLogNotes] = useState('')
-  const [savingPayment, setSavingPayment] = useState(false)
-
   // ── Member history ───────────────────────────────────────────────────────────
   const [memberHistory, setMemberHistory] = useState<HistoryEntry[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -229,11 +223,11 @@ export default function DuesPage() {
     return members
       .filter(m => m.user_id)
       .map(m => {
-        const memberId = m.user_id as string
-        const memberPayments = payments.filter(p => p.member_id === memberId)
+        const memberPayments = payments.filter(p => p.member_id === m.id)
         const amountPaid = memberPayments.reduce((sum, p) => sum + (p.amount_paid ?? 0), 0)
         return {
-          memberId,
+          memberId: m.id,
+          memberAuthId: m.user_id as string,
           memberName: m.name,
           amountDue: due,
           amountPaid,
@@ -245,7 +239,7 @@ export default function DuesPage() {
   }, [members, payments, selectedPeriod])
 
   const visibleRows = useMemo(
-    () => isManager ? allMemberRows : allMemberRows.filter(r => r.memberId === user?.id),
+    () => isManager ? allMemberRows : allMemberRows.filter(r => r.memberAuthId === user?.id),
     [allMemberRows, isManager, user]
   )
 
@@ -281,20 +275,10 @@ export default function DuesPage() {
     [allMemberRows, panelMemberId]
   )
 
-  // Auto-fill remaining balance when panel opens
+  // Reset history when switching members
   useEffect(() => {
-    if (!panelMemberId) { setLogAmount(''); setLogNotes(''); return }
-    const row = allMemberRows.find(r => r.memberId === panelMemberId)
-    if (row && row.status !== 'paid') {
-      const remaining = Math.max(0, row.amountDue - row.amountPaid)
-      setLogAmount(remaining > 0 ? (remaining / 100).toFixed(2) : '')
-    } else {
-      setLogAmount('')
-    }
-    setLogNotes('')
-    setPanelTab('period')
-    setMemberHistory([])
-  }, [panelMemberId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (panelMemberId) setMemberHistory([])
+  }, [panelMemberId])
 
   // ── Data fetching ────────────────────────────────────────────────────────────
 
@@ -337,11 +321,11 @@ export default function DuesPage() {
 
   async function loadPayments(periodId: string) {
     if (!supabase) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('dues_payments')
       .select('*')
       .eq('dues_period_id', periodId)
-    setPayments((data as DuesPayment[]) ?? [])
+    if (!error && data) setPayments(data as DuesPayment[])
   }
 
   async function refreshPeriods() {
@@ -392,7 +376,7 @@ export default function DuesPage() {
       .filter(m => m.user_id)
       .map(m => ({
         dues_period_id: (period as DuesPeriod).id,
-        member_id: m.user_id as string,
+        member_id: m.id,
         amount_paid: 0,
         logged_by: user.id,
       }))
@@ -489,23 +473,35 @@ export default function DuesPage() {
     addToast(`"${p?.name ?? 'Period'}" deleted`)
   }
 
-  async function logPayment(memberId: string) {
+  async function logPayment(memberId: string, amountCents: number, notes: string) {
     if (!supabase || !selectedPeriod || !user) return
-    const amountCents = Math.round(parseFloat(logAmount) * 100)
-    if (!amountCents || amountCents <= 0) return
 
-    setSavingPayment(true)
-    await supabase.from('dues_payments').insert({
-      dues_period_id: selectedPeriod.id,
-      member_id: memberId,
-      amount_paid: amountCents,
-      logged_by: user.id,
-      notes: logNotes.trim() || null,
+    const { data: updatedPayment, error } = await supabase.rpc('log_dues_payment', {
+      p_dues_period_id: selectedPeriod.id,
+      p_member_id:      memberId,
+      p_amount_cents:   amountCents,
+      p_logged_by:      user.id,
+      p_notes:          notes || null,
     })
+
+    if (error) {
+      console.error('log_dues_payment error:', error)
+      addToast('Failed to log payment', 'error')
+      return
+    }
+
+    // Optimistically update local state immediately
+    if (updatedPayment) {
+      const payment = updatedPayment as DuesPayment
+      setPayments(prev => {
+        const idx = prev.findIndex(p => p.id === payment.id)
+        return idx >= 0
+          ? prev.map(p => (p.id === payment.id ? payment : p))
+          : [...prev, payment]
+      })
+    }
+
     await loadPayments(selectedPeriod.id)
-    setLogAmount('')
-    setLogNotes('')
-    setSavingPayment(false)
 
     const row = allMemberRows.find(r => r.memberId === memberId)
     addToast(`Payment logged for ${row?.memberName ?? 'member'}`)
@@ -940,395 +936,65 @@ export default function DuesPage() {
 
       {/* ── Slide-over panel ─────────────────────────────────────────────────── */}
       {panelMember && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={e => { if (e.target === e.currentTarget) setPanelMemberId(null) }}
-          style={{ background: 'rgba(0,0,0,0.45)' }}
-        >
-          <div
-            className="absolute right-0 top-0 h-full w-full sm:max-w-[420px] bg-[#161B22] border-l border-[#21262D] flex flex-col"
-            style={{ animation: 'slideIn 250ms cubic-bezier(0.4,0,0.2,1)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[#21262D] flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[rgba(255,107,74,0.12)] border border-[rgba(255,107,74,0.2)] flex items-center justify-center text-[#FF6B4A] text-sm font-bold flex-shrink-0">
-                  {getInitials(panelMember.memberName)}
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-base leading-tight">{panelMember.memberName}</p>
-                  <div className="mt-0.5">
-                    <StatusBadge status={panelMember.status} />
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setPanelMemberId(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors flex-shrink-0"
-              >
-                <X size={17} />
-              </button>
-            </div>
-
-            {/* Panel tabs */}
-            <div className="flex border-b border-[#21262D] flex-shrink-0">
-              {(['period', 'history'] as PanelTab[]).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setPanelTab(tab)
-                    if (tab === 'history' && memberHistory.length === 0) {
-                      loadMemberHistory(panelMember.memberId)
-                    }
-                  }}
-                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
-                    panelTab === tab
-                      ? 'text-white border-b-2 border-[#FF6B4A]'
-                      : 'text-[#8B949E] hover:text-white'
-                  }`}
-                >
-                  {tab === 'period' ? 'This Period' : 'All Periods'}
-                </button>
-              ))}
-            </div>
-
-            {/* Panel body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-              {panelTab === 'period' && (
-                <>
-                  {/* Summary cards */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-[#0D1117] border border-[#21262D] rounded-lg p-3 text-center">
-                      <p className="text-[10px] text-[#8B949E] uppercase tracking-[0.08em] mb-1">Total Due</p>
-                      <p className="text-white font-semibold text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {formatDollars(panelMember.amountDue)}
-                      </p>
-                    </div>
-                    <div className="bg-[#0D1117] border border-[#21262D] rounded-lg p-3 text-center">
-                      <p className="text-[10px] text-[#8B949E] uppercase tracking-[0.08em] mb-1">Paid</p>
-                      <p className="text-[#3FB88C] font-semibold text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {formatDollars(panelMember.amountPaid)}
-                      </p>
-                    </div>
-                    <div className="bg-[#0D1117] border border-[#21262D] rounded-lg p-3 text-center">
-                      <p className="text-[10px] text-[#8B949E] uppercase tracking-[0.08em] mb-1">Remaining</p>
-                      <p
-                        className="font-semibold text-sm"
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          color: panelMember.amountPaid >= panelMember.amountDue ? '#3FB88C' : '#F0B429',
-                        }}
-                      >
-                        {formatDollars(Math.max(0, panelMember.amountDue - panelMember.amountPaid))}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Payment history */}
-                  <div>
-                    <p className="text-[11px] font-medium text-[#8B949E] uppercase tracking-[0.08em] mb-3">
-                      Payment History
-                    </p>
-                    {panelMember.payments.filter(p => p.amount_paid > 0).length === 0 ? (
-                      <p className="text-[#8B949E] text-sm">No payments logged yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {[...panelMember.payments]
-                          .filter(p => p.amount_paid > 0)
-                          .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
-                          .map(p => (
-                            <div key={p.id} className="bg-[#0D1117] border border-[#21262D] rounded-lg p-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-white font-semibold text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
-                                  {formatDollars(p.amount_paid)}
-                                </span>
-                                <span className="text-[#8B949E] text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
-                                  {new Date(p.paid_at).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <p className="text-[#8B949E] text-xs">
-                                Logged by {getMemberName(p.logged_by)}
-                              </p>
-                              {p.notes && (
-                                <p className="text-[#8B949E] text-xs mt-1 italic">{p.notes}</p>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {panelTab === 'history' && (
-                <>
-                  {loadingHistory ? (
-                    <div className="space-y-3 animate-pulse">
-                      {[...Array(3)].map((_, i) => (
-                        <div key={i} className="h-16 bg-[#0D1117] border border-[#21262D] rounded-lg" />
-                      ))}
-                    </div>
-                  ) : memberHistory.length === 0 ? (
-                    <p className="text-[#8B949E] text-sm">No history found.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {memberHistory.map(entry => (
-                        <div key={entry.period.id} className="bg-[#0D1117] border border-[#21262D] rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-white text-sm font-semibold">{entry.period.name}</p>
-                            <StatusBadge status={entry.status} />
-                          </div>
-                          <div className="flex items-center gap-4 text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
-                            <span className="text-[#8B949E]">Due: {formatDollars(entry.amountDue)}</span>
-                            <span className="text-[#3FB88C]">Paid: {formatDollars(entry.amountPaid)}</span>
-                            {entry.amountPaid < entry.amountDue && (
-                              <span className="text-[#F0B429]">
-                                Remaining: {formatDollars(entry.amountDue - entry.amountPaid)}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-[#8B949E] mt-1">Due {entry.period.due_date}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Log Payment form — managers + unpaid + this period tab */}
-            {isManager && panelMember.status !== 'paid' && panelTab === 'period' && selectedPeriod?.is_active && (
-              <div className="border-t border-[#21262D] p-6 space-y-4 flex-shrink-0">
-                <p className="text-[11px] font-medium text-[#8B949E] uppercase tracking-[0.08em]">
-                  Log Payment
-                </p>
-                <div>
-                  <label className="block text-xs text-[#8B949E] mb-1.5">Amount ($)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={logAmount}
-                    onChange={e => setLogAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full h-10 px-3 bg-[#0D1117] border border-[#21262D] rounded-lg text-sm text-white placeholder-[#8B949E] focus:outline-none focus:border-[#FF6B4A] transition-colors"
-                    onFocus={e => (e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,107,74,0.15)')}
-                    onBlur={e =>  (e.currentTarget.style.boxShadow = '')}
-                  />
-                  {panelMember.status === 'partial' && (
-                    <p className="text-[11px] text-[#8B949E] mt-1">
-                      Suggested: {formatDollars(Math.max(0, panelMember.amountDue - panelMember.amountPaid))} remaining
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs text-[#8B949E] mb-1.5">Notes (optional)</label>
-                  <input
-                    type="text"
-                    value={logNotes}
-                    onChange={e => setLogNotes(e.target.value)}
-                    placeholder="e.g. Cash payment"
-                    className="w-full h-10 px-3 bg-[#0D1117] border border-[#21262D] rounded-lg text-sm text-white placeholder-[#8B949E] focus:outline-none focus:border-[#FF6B4A] transition-colors"
-                    onFocus={e => (e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,107,74,0.15)')}
-                    onBlur={e =>  (e.currentTarget.style.boxShadow = '')}
-                  />
-                </div>
-                <button
-                  onClick={() => logPayment(panelMember.memberId)}
-                  disabled={!logAmount || parseFloat(logAmount) <= 0 || savingPayment}
-                  className="w-full h-10 rounded-lg bg-[#FF6B4A] text-white text-sm font-medium hover:bg-[#E85A3A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {savingPayment ? 'Saving…' : 'Log Payment'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <MemberDuesPanel
+          member={panelMember}
+          isManager={isManager}
+          selectedPeriodIsActive={selectedPeriod?.is_active ?? false}
+          memberHistory={memberHistory}
+          loadingHistory={loadingHistory}
+          getMemberName={getMemberName}
+          onClose={() => setPanelMemberId(null)}
+          onLoadHistory={() => loadMemberHistory(panelMember.memberId)}
+          onLogPayment={(amountCents, notes) => logPayment(panelMember.memberId, amountCents, notes)}
+        />
       )}
 
       {/* ── New Period modal ──────────────────────────────────────────────────── */}
       {showNewPeriod && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowNewPeriod(false) }}
-        >
-          <div
-            className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
-            style={{ animation: 'modalIn 200ms ease-out' }}
-          >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[#21262D]">
-              <h2 className="text-white font-semibold text-lg">New Dues Period</h2>
-              <button
-                onClick={() => setShowNewPeriod(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors"
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <PeriodFormFields
-                name={newName} setName={setNewName}
-                amount={newAmount} setAmount={setNewAmount}
-                date={newDate} setDate={setNewDate}
-                lateFee={newLateFee} setLateFee={setNewLateFee}
-              />
-              {periodError && <p className="text-[#E5484D] text-sm">{periodError}</p>}
-              <p className="text-[#8B949E] text-xs">
-                A $0 payment record will be auto-generated for all {members.filter(m => m.user_id).length} active members.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#21262D]">
-              <button
-                onClick={() => { setShowNewPeriod(false); setPeriodError('') }}
-                className="h-10 px-4 rounded-lg border border-[#21262D] text-white text-sm font-medium hover:border-[#30363D] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createPeriod}
-                disabled={!newName.trim() || !newAmount || !newDate || savingPeriod}
-                className="h-10 px-4 rounded-lg bg-[#FF6B4A] text-white text-sm font-medium hover:bg-[#E85A3A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingPeriod ? 'Creating…' : 'Create Period'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <NewPeriodModal
+          memberCount={members.filter(m => m.user_id).length}
+          name={newName} setName={setNewName}
+          amount={newAmount} setAmount={setNewAmount}
+          date={newDate} setDate={setNewDate}
+          lateFee={newLateFee} setLateFee={setNewLateFee}
+          saving={savingPeriod} error={periodError}
+          onClose={() => { setShowNewPeriod(false); setPeriodError('') }}
+          onCreate={createPeriod}
+        />
       )}
 
       {/* ── Edit Period modal ─────────────────────────────────────────────────── */}
       {editingPeriod && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={e => { if (e.target === e.currentTarget) setEditingPeriod(null) }}
-        >
-          <div
-            className="w-full max-w-md bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
-            style={{ animation: 'modalIn 200ms ease-out' }}
-          >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[#21262D]">
-              <h2 className="text-white font-semibold text-lg">Edit Period</h2>
-              <button
-                onClick={() => setEditingPeriod(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[#8B949E] hover:text-white hover:bg-[#21262D] transition-colors"
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <PeriodFormFields
-                name={editName} setName={setEditName}
-                amount={editAmount} setAmount={setEditAmount}
-                date={editDate} setDate={setEditDate}
-                lateFee={editLateFee} setLateFee={setEditLateFee}
-              />
-              {editError && <p className="text-[#E5484D] text-sm">{editError}</p>}
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#21262D]">
-              <button
-                onClick={() => setEditingPeriod(null)}
-                className="h-10 px-4 rounded-lg border border-[#21262D] text-white text-sm font-medium hover:border-[#30363D] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={savePeriodEdit}
-                disabled={!editName.trim() || !editAmount || !editDate || savingEdit}
-                className="h-10 px-4 rounded-lg bg-[#FF6B4A] text-white text-sm font-medium hover:bg-[#E85A3A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingEdit ? 'Saving…' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <EditPeriodModal
+          name={editName} setName={setEditName}
+          amount={editAmount} setAmount={setEditAmount}
+          date={editDate} setDate={setEditDate}
+          lateFee={editLateFee} setLateFee={setEditLateFee}
+          saving={savingEdit} error={editError}
+          onClose={() => setEditingPeriod(null)}
+          onSave={savePeriodEdit}
+        />
       )}
 
       {/* ── Delete Confirmation modal ─────────────────────────────────────────── */}
       {confirmDeleteId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={e => { if (e.target === e.currentTarget) setConfirmDeleteId(null) }}
-        >
-          <div
-            className="w-full max-w-sm bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
-            style={{ animation: 'modalIn 200ms ease-out' }}
-          >
-            <div className="p-6">
-              <h2 className="text-white font-semibold text-lg mb-2">Delete Period</h2>
-              <p className="text-[#8B949E] text-sm leading-relaxed">
-                Delete{' '}
-                <span className="text-white font-medium">
-                  &ldquo;{periods.find(p => p.id === confirmDeleteId)?.name}&rdquo;
-                </span>
-                ? This will permanently remove all payment records for this period. This cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#21262D]">
-              <button
-                onClick={() => setConfirmDeleteId(null)}
-                className="h-10 px-4 rounded-lg border border-[#21262D] text-white text-sm font-medium hover:border-[#30363D] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={deletePeriod}
-                disabled={deletingPeriod}
-                className="h-10 px-4 rounded-lg bg-[#E5484D] text-white text-sm font-medium hover:bg-[#CC3C40] active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                {deletingPeriod ? 'Deleting…' : 'Delete Period'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeletePeriodModal
+          periodName={periods.find(p => p.id === confirmDeleteId)?.name}
+          deleting={deletingPeriod}
+          onClose={() => setConfirmDeleteId(null)}
+          onConfirm={deletePeriod}
+        />
       )}
 
       {/* ── Send Reminders modal ──────────────────────────────────────────────── */}
       {showReminders && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowReminders(false) }}
-        >
-          <div
-            className="w-full max-w-sm bg-[#161B22] border border-[#21262D] rounded-2xl overflow-hidden"
-            style={{ animation: 'modalIn 200ms ease-out' }}
-          >
-            <div className="p-6">
-              <h2 className="text-white font-semibold text-lg mb-2">Send Reminders</h2>
-              {unpaidCount > 0 ? (
-                <p className="text-[#8B949E] text-sm leading-relaxed">
-                  Send payment reminders to{' '}
-                  <span className="text-white font-medium">{unpaidCount} unpaid member{unpaidCount !== 1 ? 's' : ''}</span>{' '}
-                  in <span className="text-white font-medium">{selectedPeriod?.name}</span>?
-                </p>
-              ) : (
-                <p className="text-[#8B949E] text-sm">
-                  All members have paid — no reminders needed.
-                </p>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#21262D]">
-              <button
-                onClick={() => setShowReminders(false)}
-                className="h-10 px-4 rounded-lg border border-[#21262D] text-white text-sm font-medium hover:border-[#30363D] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={sendReminders}
-                disabled={sendingReminders || unpaidCount === 0}
-                className="h-10 px-4 rounded-lg bg-[#FF6B4A] text-white text-sm font-medium hover:bg-[#E85A3A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sendingReminders ? 'Sending…' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SendRemindersModal
+          unpaidCount={unpaidCount}
+          periodName={selectedPeriod?.name}
+          sending={sendingReminders}
+          onClose={() => setShowReminders(false)}
+          onConfirm={sendReminders}
+        />
       )}
 
       {/* ── Keyframe animations ───────────────────────────────────────────────── */}
@@ -1347,48 +1013,6 @@ export default function DuesPage() {
         }
       `}</style>
     </DashboardShell>
-  )
-}
-
-// ── Shared form fields component ─────────────────────────────────────────────
-
-function PeriodFormFields({
-  name, setName, amount, setAmount, date, setDate, lateFee, setLateFee,
-}: {
-  name: string; setName: (v: string) => void
-  amount: string; setAmount: (v: string) => void
-  date: string; setDate: (v: string) => void
-  lateFee: string; setLateFee: (v: string) => void
-}) {
-  const inputClass = "w-full h-10 px-3 bg-[#0D1117] border border-[#21262D] rounded-lg text-sm text-white placeholder-[#8B949E] focus:outline-none focus:border-[#FF6B4A] transition-colors"
-  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255,107,74,0.15)')
-  const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.boxShadow = '')
-  return (
-    <>
-      <div>
-        <label className="block text-xs text-[#8B949E] uppercase tracking-[0.05em] mb-1.5">Period Name</label>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Spring 2026"
-          className={inputClass} onFocus={onFocus} onBlur={onBlur} autoFocus />
-      </div>
-      <div>
-        <label className="block text-xs text-[#8B949E] uppercase tracking-[0.05em] mb-1.5">Amount Per Member ($)</label>
-        <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
-          placeholder="0.00" className={inputClass} onFocus={onFocus} onBlur={onBlur} />
-      </div>
-      <div>
-        <label className="block text-xs text-[#8B949E] uppercase tracking-[0.05em] mb-1.5">Due Date</label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className={inputClass} onFocus={onFocus} onBlur={onBlur} />
-      </div>
-      <div>
-        <label className="block text-xs text-[#8B949E] uppercase tracking-[0.05em] mb-1.5">
-          Late Fee ($) <span className="normal-case font-normal text-[#8B949E]">— optional</span>
-        </label>
-        <input type="number" min="0" step="0.01" value={lateFee} onChange={e => setLateFee(e.target.value)}
-          placeholder="0.00" className={inputClass} onFocus={onFocus} onBlur={onBlur} />
-        <p className="text-[10px] text-[#8B949E] mt-1">Added to balance after due date passes.</p>
-      </div>
-    </>
   )
 }
 
